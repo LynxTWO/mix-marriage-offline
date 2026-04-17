@@ -48,6 +48,8 @@ def _arch_tag_for_target(target_triple: str) -> str:
 
 
 def sidecar_binary_name(*, target_triple: str, base_name: str = DEFAULT_BASE_NAME) -> str:
+    # Tauri looks for the staged binary by target triple, not by the friendlier
+    # release artifact name that build_binaries.py emits.
     return f"{base_name}-{target_triple}{_binary_suffix(target_triple)}"
 
 
@@ -65,6 +67,8 @@ def build_binary_name_for_target(
 def _rustc_host_target() -> str:
     explicit_target = os.environ.get("MMO_TAURI_TARGET_TRIPLE", "").strip()
     if explicit_target:
+        # An explicit target wins over rustc host discovery because release and
+        # CI packaging can stage sidecars for a target other than this machine.
         return explicit_target
 
     try:
@@ -131,6 +135,8 @@ def is_sidecar_up_to_date(
         repo_root / "tools" / "build_binaries.py",
         repo_root / "tools" / "prepare_tauri_sidecar.py",
     )
+    # Watch only the inputs that can change the staged CLI payload. Frontend and
+    # Rust edits should not force a sidecar rebuild by themselves.
     latest_input_mtime = _latest_source_mtime(
         source_file
         for source_input in source_inputs
@@ -146,6 +152,8 @@ def is_sidecar_up_to_date(
 def _ensure_executable(path: Path) -> None:
     if _binary_suffix(path.name):
         return
+    # The copied Unix sidecar can lose its execute bit when staged on fresh
+    # filesystems. Restore it here instead of relying on the temp build dir.
     current_mode = path.stat().st_mode
     path.chmod(current_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
 
@@ -160,6 +168,8 @@ def prepare_tauri_sidecar(
     base_name: str = DEFAULT_BASE_NAME,
 ) -> Path:
     binaries_dir = (tauri_src / "binaries").resolve()
+    # Stage under src-tauri/binaries so dev, build, and packaged smoke all hit
+    # the same sidecar location that tauri.conf.json bundles.
     binaries_dir.mkdir(parents=True, exist_ok=True)
 
     staged_sidecar_path = binaries_dir / sidecar_binary_name(
@@ -173,6 +183,8 @@ def prepare_tauri_sidecar(
         dir=binaries_dir,
         prefix=".sidecar-build-",
     ) as temp_dir:
+        # Build into a throwaway sibling dir first. A failed build should not
+        # leave a half-written sidecar at the bundled path.
         build_output_dir = Path(temp_dir)
         command = [
             python_executable,
@@ -203,6 +215,8 @@ def prepare_tauri_sidecar(
                 f"Built sidecar was not found at {built_binary_path.as_posix()}."
             )
 
+        # Copy the release-shaped binary into the Tauri bundle name only after
+        # the build completed and the expected output path exists.
         shutil.copy2(built_binary_path, staged_sidecar_path)
         _ensure_executable(staged_sidecar_path)
     return staged_sidecar_path

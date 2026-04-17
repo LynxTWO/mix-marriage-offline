@@ -29,6 +29,8 @@ def _expected_msi_version(semver: str) -> str | None:
     Returns *None* if the SemVer string has a prerelease tag that is not
     a recognised ``rc.N`` pattern.
     """
+    # MSI versioning is a Windows-only packaging contract. Keep the mapping
+    # narrow so unsupported prerelease shapes fail before bundle creation.
     match = re.fullmatch(
         r"(?P<major>\d+)\.(?P<minor>\d+)\.(?P<patch>\d+)"
         r"(?:-rc\.(?P<rc>\d+))?",
@@ -45,6 +47,8 @@ def validate_msi_version(*, repo_root: Path) -> dict[str, Any]:
     """Return a JSON-serialisable result dict with ``ok`` and details."""
     errors: list[str] = []
 
+    # Read version authority from tauri.conf.json so the validator checks the
+    # same payload the Windows bundle step and smoke harness package.
     tauri_conf_path = repo_root / TAURI_CONF_REL
     if not tauri_conf_path.is_file():
         errors.append(f"Tauri config not found: {TAURI_CONF_REL}")

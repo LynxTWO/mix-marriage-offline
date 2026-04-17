@@ -31,6 +31,8 @@ jobs:
         run: python tools/validate_contracts.py
 
       - name: Run tests
+        # Release tags only proceed after the same repo-local pytest runner the
+        # docs ask operators to use for local validation.
         run: tools/run_pytest.sh -q
 
   build-manual:
@@ -105,6 +107,8 @@ jobs:
           python -m pip install -e ".[truth,pdf]" pyinstaller nuitka ordered-set zstandard
 
       - name: Build standalone binary (PyInstaller + Nuitka fallback)
+        # The helper script records which backend won and why the other one
+        # failed, so release logs keep that fallback visible.
         run: python tools/build_binaries.py --output-dir dist
 
       - name: Smoke standalone CLI binary (Windows)
@@ -141,6 +145,8 @@ jobs:
           "$cli_bin" --help
 
       - name: Upload binary artifacts
+        # Upload raw binaries and checksums together so later release assembly
+        # does not have to reconstruct which digest matched which file.
         uses: actions/upload-artifact@v6
         with:
           name: mmo-binaries-${{ matrix.artifact-label }}
@@ -277,6 +283,8 @@ jobs:
           MMO_WINDOWS_CERT_THUMBPRINT: ${{ secrets.MMO_WINDOWS_CERT_THUMBPRINT }}
           MMO_WINDOWS_TIMESTAMP_URL: ${{ secrets.MMO_WINDOWS_TIMESTAMP_URL }}
         run: |
+          # Missing signing inputs disable the signing path cleanly. They do not
+          # leave the workflow in a half-configured state.
           if ([string]::IsNullOrWhiteSpace($env:MMO_WINDOWS_CERT_BASE64) -or
               [string]::IsNullOrWhiteSpace($env:MMO_WINDOWS_CERT_PASSWORD) -or
               [string]::IsNullOrWhiteSpace($env:MMO_WINDOWS_CERT_THUMBPRINT)) {
@@ -319,6 +327,8 @@ jobs:
         env:
           PYTHON: python
         run: |
+          # Signed Windows releases build the unsigned payload first, sign the
+          # real binaries, then bundle installers from that signed payload.
           if ($env:MMO_WINDOWS_SIGNING_ENABLED -eq "true") {
             Write-Host "Windows signing enabled: building the desktop payload without bundling first."
             npm run tauri build -- --no-bundle --no-sign
@@ -464,6 +474,8 @@ jobs:
         working-directory: gui/desktop-tauri
         env:
           PYTHON: python
+        # Non-Windows platforms can bundle directly because the signing split
+        # above is only needed for the Windows payload and installer chain.
         run: npm run tauri build -- --bundles ${{ matrix.tauri-bundles }}
 
       - name: Smoke packaged desktop bundle (Linux)
@@ -647,6 +659,8 @@ jobs:
           path: dist/
 
       - name: Create GitHub Release
+        # Release assembly only pulls uploaded artifacts. That keeps the final
+        # GitHub release tied to the exact outputs smoke and validation saw.
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ env.RELEASE_TAG }}

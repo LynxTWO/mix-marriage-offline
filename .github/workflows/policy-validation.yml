@@ -22,6 +22,8 @@ jobs:
           python -m pip install .[dev,truth,pdf]
 
       - name: Validate policy registry and packs
+        # Keep this lane narrow so policy regressions fail with policy-specific
+        # output instead of getting buried inside the broader contract suite.
         run: |
           python tools/validate_policies.py ontology/policies/downmix.yaml
 
@@ -42,5 +44,7 @@ jobs:
           python tools/run_session_fixtures.py fixtures/sessions
 
       - name: Run unit tests
+        # This workflow keeps a plain pytest invocation on purpose. It proves
+        # policy jobs still work even when the repo runner is not the caller.
         run: |
           python -m pytest

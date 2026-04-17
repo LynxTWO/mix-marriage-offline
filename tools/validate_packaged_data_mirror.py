@@ -55,6 +55,8 @@ MIRROR_PAIRS: tuple[MirrorPair, ...] = (
         include_prefixes=("detectors/", "resolvers/", "renderers/"),
     ),
 )
+# Validation matches the sync allowlist exactly. Drift between the two would
+# make release checks disagree with the mirror tool that fixes them.
 
 IGNORED_NAMES: frozenset[str] = frozenset({
     ".DS_Store",
@@ -166,6 +168,8 @@ def validate() -> dict[str, object]:
             src_hash = _sha256(src_dir / rel)
             dst_hash = _sha256(dst_dir / rel)
             if src_hash != dst_hash:
+                # Hash mismatches are release blockers because packaged data has
+                # drifted even though both files exist.
                 mismatched.append(f"{pair.src_rel}/{rel}")
 
     ok = len(missing) == 0 and len(extra) == 0 and len(mismatched) == 0

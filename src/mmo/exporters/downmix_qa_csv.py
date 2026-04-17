@@ -11,11 +11,14 @@ def _safe_str(value: Any) -> str:
     if value is None:
         return ""
     if isinstance(value, (dict, list)):
+        # Nested evidence stays compact JSON so CSV exports preserve content
+        # without inventing ad hoc string formats.
         return json.dumps(value, sort_keys=True, separators=(",", ":"))
     return str(value)
 
 
 def _sorted_measurements(measurements: Iterable[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    # Evidence rows sort by id first so repeated QA runs stay easy to diff.
     return sorted(
         measurements,
         key=lambda item: (
@@ -32,6 +35,7 @@ def _sorted_issues(issues: Iterable[Dict[str, Any]]) -> List[Dict[str, Any]]:
         except (TypeError, ValueError):
             return 0
 
+    # Put the highest-severity QA failures first. Later keys only break ties.
     return sorted(
         issues,
         key=lambda item: (
@@ -48,6 +52,8 @@ def _write_downmix_qa_csv(payload: Dict[str, Any], handle: TextIO) -> None:
         downmix_qa = {}
     writer = csv.writer(handle)
 
+    # Keep section order fixed so summary, measurements, and issues line up
+    # across exported files and stdout renders.
     writer.writerow(["section", "key", "value"])
     writer.writerow(["summary", "src_path", _safe_str(downmix_qa.get("src_path"))])
     writer.writerow(["summary", "ref_path", _safe_str(downmix_qa.get("ref_path"))])

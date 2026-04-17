@@ -50,6 +50,8 @@ def _canonical_json(value: Any) -> str:
 
 
 def _issue_where_signature(issue: Dict[str, Any]) -> str | None:
+    # Where-signatures catch the common case where the same QA issue is emitted
+    # twice for the same path or target scope under different report layers.
     evidence = issue.get("evidence", [])
     if not isinstance(evidence, list):
         return None
@@ -66,6 +68,8 @@ def _issue_where_signature(issue: Dict[str, Any]) -> str | None:
 
 
 def _issue_evidence_fingerprint(issue: Dict[str, Any]) -> str | None:
+    # Evidence fingerprints guard the less obvious duplicate case where two
+    # issue rows describe the same measurement with slightly different wording.
     evidence = issue.get("evidence", [])
     if not isinstance(evidence, list):
         return None
@@ -151,6 +155,8 @@ def merge_downmix_qa_issues_into_report(report: Dict[str, Any]) -> None:
 
     if not to_add:
         return
+    # Sort before extend so repeated merges do not create order-only report
+    # churn when the same QA payload is rebuilt through different paths.
     to_add.sort(key=lambda item: (str(item.get("issue_id", "")), str(item.get("message", ""))))
     report_issues.extend(to_add)
 
@@ -184,6 +190,8 @@ def enrich_blocked_downmix_render_diagnostics(report: dict) -> dict:
             and isinstance(result.get("gate_id"), str)
         }
         qa_delta_rejected_gate_ids = rejected_gate_ids.intersection(DOWNMIX_QA_DELTA_GATE_IDS)
+        # Only gate-rejected render attempts get these follow-up diagnostics.
+        # Attaching them to every downmix issue would blur a real stop signal.
         if not qa_delta_rejected_gate_ids:
             continue
 
@@ -295,6 +303,8 @@ def build_minimal_report_for_downmix_qa(
     }
     if isinstance(profile_id, str) and profile_id.strip():
         report["profile_id"] = profile_id.strip()
+    # Normalize the report shell before any recommendations or gates run so
+    # later consumers see the same base shape in dry runs and blocked renders.
     merge_downmix_qa_issues_into_report(report)
     if issues:
         recommendations = report["recommendations"]
@@ -384,6 +394,8 @@ def build_minimal_report_for_downmix_qa(
                 }
             )
 
+        # Gate evaluation runs after recommendation synthesis so approval and
+        # render eligibility can inspect the same normalized recommendation set.
         apply_gates_to_report(
             report,
             policy_path=ontology_dir() / "policies" / "gates.yaml",

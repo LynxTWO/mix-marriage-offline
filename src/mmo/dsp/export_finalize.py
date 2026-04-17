@@ -72,6 +72,8 @@ def derive_export_finalization_seed(
     stem_id: str | None = None,
     render_seed: int = DEFAULT_EXPORT_RENDER_SEED,
 ) -> int:
+    # Tie the dither stream to stable render identity inputs so retries and
+    # chunking changes do not silently change exported PCM bytes.
     material = "\x1f".join(
         (
             _normalize_id(job_id, UNKNOWN_EXPORT_JOB_ID),
@@ -95,6 +97,8 @@ def build_export_finalization_receipt(
     target_peak_dbfs: float | None = None,
 ) -> dict[str, Any]:
     resolved_policy = resolve_dither_policy_for_bit_depth(bit_depth, dither_policy)
+    # Clamp behavior is part of the export contract. Put it in the receipt so
+    # later QA can explain clipped inputs without reverse-engineering code.
     receipt: dict[str, Any] = {
         "bit_depth": int(bit_depth),
         "dither_policy": resolved_policy,
@@ -240,6 +244,8 @@ def export_finalize_interleaved_f64(
     seed: int,
 ) -> bytes:
     resolved_policy = resolve_dither_policy_for_bit_depth(bit_depth, dither_policy)
+    # One-shot export and the streaming finalizer below must share the same
+    # state construction or identical renders will diverge by write path.
     state = _ExportFinalizeState.from_seed(
         channels=channels,
         dither_policy=resolved_policy,
@@ -265,6 +271,8 @@ class StreamingExportFinalizer:
     ) -> None:
         self.channels = int(channels)
         self.bit_depth = int(bit_depth)
+        # Validate bit depth and dither policy up front so a long-running render
+        # fails before writing partial output with an unsupported setting.
         self.dither_policy = resolve_dither_policy_for_bit_depth(
             self.bit_depth,
             dither_policy,

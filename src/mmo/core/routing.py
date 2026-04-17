@@ -38,6 +38,9 @@ def _safe_layout_channel_order(layout_id: str) -> list[str]:
     try:
         layouts = load_layouts(ontology_dir() / "layouts.yaml")
     except (RuntimeError, ValueError):
+        # Routing falls back to "no safe default" when the layout registry is
+        # unavailable. Guessing speaker labels here would create hidden audio
+        # moves in the report.
         return []
     layout = layouts.get(layout_id)
     if not isinstance(layout, dict):
@@ -65,6 +68,8 @@ def _stems_sorted_for_routing(session: dict[str, Any]) -> list[dict[str, Any]]:
         stem_file = _coerce_str(stem.get("file_path")).strip()
         rows.append((stem_id, stem_file, index, stem))
 
+    # One route order keeps routing-plan receipts diffable when the incoming
+    # session stem list was assembled in a different order.
     rows.sort(key=lambda row: (row[0], row[1], row[2]))
     return [row[3] for row in rows]
 
@@ -117,6 +122,9 @@ def build_routing_plan(
         mapping: list[dict[str, Any]] = []
         notes: list[str] = []
 
+        # Automatic mappings stay narrow on purpose: identity when channel
+        # counts match, mono to stereo at -3 dB, stereo to surround front L/R
+        # only, and otherwise no implicit routing.
         if stem_channels > 0 and stem_channels == target_channels:
             for channel_index in range(stem_channels):
                 mapping.append(_mapping_entry(channel_index, channel_index))
@@ -227,6 +235,8 @@ def routing_layout_ids_from_run_config(run_config: Any) -> tuple[str, str] | Non
 def apply_routing_plan_to_report(report: dict[str, Any], run_config: Any) -> None:
     layout_ids = routing_layout_ids_from_run_config(run_config)
     if layout_ids is None:
+        # Remove stale routing output when run_config no longer names layouts.
+        # Keeping the old plan would make the report look freshly routed.
         report.pop("routing_plan", None)
         return
     session = report.get("session")

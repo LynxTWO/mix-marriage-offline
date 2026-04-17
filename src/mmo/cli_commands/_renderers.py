@@ -436,9 +436,9 @@ def _artifact_result_details(
     deliverables: list[dict[str, Any]],
     deliverables_summary: dict[str, Any],
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
-    # Keep both row-wise and concise summaries so manifests, receipts, smoke,
+    # Return both row-wise and concise summaries so manifests, receipts, smoke,
     # CLI, and desktop consumers can each load the surface they need without
-    # reconstructing it from raw deliverables.
+    # rebuilding it from raw deliverables.
     summary_rows = build_deliverable_summary_rows(
         renderer_manifests=renderer_manifests,
         deliverables=deliverables,
@@ -603,6 +603,9 @@ def _run_render_command(
     _set_session_workspace_dir(report, workspace_dir=report_path.parent)
     normalized_run_config: dict[str, Any] | None = None
     if run_config is not None:
+        # Normalize and stamp routing before gates run so renderer-side
+        # eligibility is judged against the same layout contract that will be
+        # rendered.
         normalized_run_config = normalize_run_config(run_config)
         report["run_config"] = normalized_run_config
         if routing_layout_ids_from_run_config(normalized_run_config) is not None:
@@ -629,6 +632,8 @@ def _run_render_command(
         if isinstance(candidate_scene, dict):
             scene_payload = candidate_scene
     if isinstance(scene_payload, dict):
+        # Renderers inherit the already-chosen scene authority. Precedence does
+        # not rerun here; it only constrains which gated recs can still render.
         apply_recommendation_precedence(scene_payload, recs)
 
     eligible = [rec for rec in recs if rec.get("eligible_render") is True]
@@ -790,6 +795,8 @@ def _run_apply_command(
     report = _load_report(report_path)
     _set_session_workspace_dir(report, workspace_dir=report_path.parent)
     if run_config is not None:
+        # Apply the same normalized routing contract here that render and
+        # compare flows see, or auto-apply can stamp a stale layout plan.
         normalized_run_config = normalize_run_config(run_config)
         report["run_config"] = normalized_run_config
         if routing_layout_ids_from_run_config(normalized_run_config) is not None:
@@ -816,6 +823,8 @@ def _run_apply_command(
         if isinstance(candidate_scene, dict):
             scene_payload = candidate_scene
     if isinstance(scene_payload, dict):
+        # Auto-apply uses the same locked scene authority as render. A rec that
+        # survives gates can still stay visible here while hard locks block it.
         apply_recommendation_precedence(scene_payload, recs)
 
     eligible = [rec for rec in recs if rec.get("eligible_auto_apply") is True]
@@ -1306,7 +1315,8 @@ def _run_render_many_targets(
                 results.append((tgt, 1))
             _check_cancel_requested(cancel_token=token, cancel_file=cancel_file)
 
-    # Stable output order
+    # Sort after the futures finish so parallel completion order does not
+    # reshuffle the summary output.
     results.sort(key=lambda r: r[0])
     if token.is_cancelled:
         return 130
@@ -2261,6 +2271,8 @@ def _prepare_safe_render_scene_inputs(
         scene_mode = "explicit"
         scene_source_path = scene_path.resolve().as_posix()
     elif scene_locks_path is not None or scene_strict:
+        # Locks and strict validation need the same canonical scene shape the
+        # renderer would use later, even when no scene file was supplied.
         scene_payload = build_scene_from_session(session_payload)
 
     if scene_payload is not None:
@@ -2271,6 +2283,9 @@ def _prepare_safe_render_scene_inputs(
         scene_locks_source_path = scene_locks_path.resolve().as_posix()
 
     if scene_payload is not None and (scene_path is not None or scene_locks_path is not None):
+        # Explicit scenes and lock files can carry stale refs from another
+        # workspace. Rebind before linting or precedence so strict mode judges
+        # the current session, not machine-local leftovers.
         scene_payload, locks_payload, scene_binding_summary = bind_scene_inputs_to_session(
             scene_payload=scene_payload,
             session_payload=session_payload,
@@ -2306,6 +2321,8 @@ def _prepare_safe_render_scene_inputs(
             )
 
     if scene_path is not None and scene_payload is not None:
+        # Lint after rebinding so strict mode stops on the scene as it will be
+        # rendered here, not on stale refs from another workspace.
         lint_payload = build_scene_lint_payload(
             scene_payload=scene_payload,
             scene_path=scene_path,
@@ -2358,6 +2375,8 @@ def _prepare_safe_render_scene_inputs(
             )
 
     if scene_payload is not None:
+        # Precedence must land before any strict reference check so the scene
+        # validated here matches the one later gates and render steps will see.
         scene_payload = apply_precedence(
             scene_payload,
             locks_payload,
@@ -2369,6 +2388,8 @@ def _prepare_safe_render_scene_inputs(
         if scene_payload is None:
             scene_payload = build_scene_from_session(session_payload)
 
+        # Strict mode is the last no-audio stop. Missing refs or an unreadable
+        # role registry should fail here before render-side side effects begin.
         missing_stem_refs = sorted(
             _scene_referenced_stem_ids(scene_payload) - _report_session_stem_ids(report)
         )
@@ -2591,6 +2612,8 @@ def _run_safe_render_command(
             scene_binding_summary,
             workspace_dir=workspace_dir,
         )
+        # Persist the prepared scene and binding summary back into the session
+        # so later receipts can show which scene drove this render.
         if isinstance(scene_payload_for_render, dict):
             session_payload["scene_payload"] = _json_clone(scene_payload_for_render)
         if isinstance(scene_locks_payload, dict):
@@ -2605,6 +2628,8 @@ def _run_safe_render_command(
         )
         session_payload["target_layout_id"] = resolved_target.layout_id
         if run_config is not None:
+            # Preflight and later receipts must read the same normalized layout
+            # contract the renderer will follow if this run continues.
             normalized_run_config = normalize_run_config(run_config)
             report["run_config"] = normalized_run_config
             if routing_layout_ids_from_run_config(normalized_run_config) is not None:
@@ -2629,6 +2654,9 @@ def _run_safe_render_command(
                     report=report,
                 )
             else:
+                # Reports can reach safe-render without a persisted scene. Fall
+                # back to the shared builder so preflight still sees canonical
+                # scene structure instead of a report-shaped guess.
                 try:
                     preflight_scene = build_scene_from_session(session_payload)
                 except (ValueError, KeyError, TypeError):
@@ -2864,6 +2892,8 @@ def _run_safe_render_command(
         _check_cancel_requested(cancel_token=token, cancel_file=cancel_file)
         run_resolvers(report, plugins)
         if isinstance(scene_payload_for_render, dict):
+            # Resolvers add advisory values after the first scene prep pass.
+            # Reapply locks here so gates and approvals judge final winners.
             scene_payload_for_render = apply_precedence(
                 scene_payload_for_render,
                 scene_locks_payload,
@@ -2897,6 +2927,8 @@ def _run_safe_render_command(
                 if isinstance(rec, dict)
             ]
         if isinstance(scene_payload_for_render, dict):
+            # Gate results land first. Recommendation precedence then marks
+            # which gated recs stay visible but blocked by scene locks.
             apply_recommendation_precedence(scene_payload_for_render, recs)
         for rec in recs:
             if not recommendation_targets_explicit_lfe(rec, explicit_lfe_ids):
@@ -3719,7 +3751,8 @@ def _run_safe_render_demo(
                 )
                 results.append((std, 1))
 
-    # Stable output order
+    # Sort after the futures finish so parallel completion order does not
+    # reshuffle the summary output.
     results.sort(key=lambda r: r[0])
     failed = [std for std, rc in results if rc != 0]
     succeeded = [std for std, rc in results if rc == 0]

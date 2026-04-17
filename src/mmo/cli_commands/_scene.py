@@ -887,6 +887,8 @@ def _run_render_plan_from_request_command(
         schema_path=schemas_dir() /"scene.schema.json",
         payload_name="Scene",
     )
+    # Planner echoes resolved source paths into the plan artifact. Clone first so
+    # the loaded scene payload stays portable and unchanged in memory.
     scene_for_plan = json.loads(json.dumps(scene_payload))
     scene_for_plan["scene_path"] = scene_path.resolve().as_posix()
 
@@ -900,11 +902,15 @@ def _run_render_plan_from_request_command(
             schema_path=schemas_dir() /"routing_plan.schema.json",
             payload_name="Routing plan",
         )
+        # The plan records where routing came from. Keep that provenance on a
+        # cloned payload so callers do not accidentally reuse a path-annotated copy.
         routing_plan_payload = json.loads(json.dumps(routing_plan_payload))
         routing_plan_payload["routing_plan_path"] = (
             routing_plan_path.resolve().as_posix()
         )
 
+    # Optional registries come from repo-packaged ontology data. Missing files
+    # narrow planning features, but request payloads do not get to invent them.
     layouts: dict[str, Any] | None = None
     layouts_path = ontology_dir() /"layouts.yaml"
     if layouts_path.is_file():
@@ -924,8 +930,12 @@ def _run_render_plan_from_request_command(
 
         downmix_reg = load_downmix_registry(downmix_yaml)
 
+    # Gate policy ids must come from ontology so the request can only reference
+    # policies the current install actually ships.
     known_gates_ids = _load_gates_policy_ids()
 
+    # Build, validate, then write the plan before anything else uses it. Later
+    # stages should point back to one canonical render_plan.json on disk.
     render_plan_payload = build_render_plan_from_request(
         request_payload,
         scene_for_plan,
@@ -987,6 +997,8 @@ def _run_render_run_command(
         print("--qa-enforce requires --qa-out.", file=sys.stderr)
         return 1
 
+    # Keep overwrite flags split by artifact class. Operators often need to
+    # rerun plan or report generation without discarding QA or audit evidence.
     # -- overwrite guard -------------------------------------------------------
     for out_path, label in (
         (plan_out_path, "plan-out"),
@@ -1035,6 +1047,8 @@ def _run_render_run_command(
         payload_name="Render request",
     )
     dry_run_enabled = request_dry_run_enabled(request_payload)
+    # Dry runs still produce plan and report artifacts, but execute or QA traces
+    # would claim audio work that never started.
     if execute_out_path is not None and dry_run_enabled:
         print(
             "--execute-out requires request options dry_run=false.",
@@ -1080,6 +1094,8 @@ def _run_render_run_command(
         schema_path=schemas_dir() /"scene.schema.json",
         payload_name="Scene",
     )
+    # Keep the loaded scene artifact untouched. The planner needs resolved path
+    # hints, but those belong in render_plan.json rather than scene.json.
     scene_for_plan = json.loads(json.dumps(scene_payload))
     scene_for_plan["scene_path"] = scene_path.resolve().as_posix()
 
@@ -1093,11 +1109,15 @@ def _run_render_run_command(
             schema_path=schemas_dir() /"routing_plan.schema.json",
             payload_name="Routing plan",
         )
+        # Record the resolved routing source in the plan without mutating the
+        # caller-visible routing payload.
         routing_plan_payload = json.loads(json.dumps(routing_plan_payload))
         routing_plan_payload["routing_plan_path"] = (
             routing_plan_path.resolve().as_posix()
         )
 
+    # Optional registries come from install-owned ontology data. Missing files
+    # should disable those planning features, not widen request authority.
     # -- load optional registries -----------------------------------------------
     layouts: dict[str, Any] | None = None
     layouts_path = ontology_dir() /"layouts.yaml"
@@ -1118,8 +1138,12 @@ def _run_render_run_command(
 
         downmix_reg = load_downmix_registry(downmix_yaml)
 
+    # Gate policy ids are load-time authority. The request can pick from shipped
+    # policies, but it cannot inject an unknown policy id into planning.
     known_gates_ids = _load_gates_policy_ids()
 
+    # Persist the canonical plan before preflight, report, or event-log work so
+    # every later artifact points back to one validated render_plan.json.
     # -- build plan ------------------------------------------------------------
     render_plan_payload = build_render_plan_from_request(
         request_payload,
@@ -1153,6 +1177,8 @@ def _run_render_run_command(
             payload_name="Render preflight",
         )
         _write_json_file(preflight_out_path, render_preflight_payload)
+        # Exit after writing the blocking evidence. Callers need the saved plan
+        # and preflight artifact, but no audio side effects past this point.
         if preflight_has_error_issues(render_preflight_payload):
             return 2
 
@@ -1211,6 +1237,8 @@ def _run_render_run_command(
         payload_name="Render report",
     )
 
+    # Write artifacts in dependency order. execute, QA, and event-log payloads
+    # must describe the exact plan and report already written to disk.
     # -- write outputs ---------------------------------------------------------
     _write_json_file(report_out_path, render_report_payload)
     if execute_out_path is not None:
@@ -1252,6 +1280,8 @@ def _run_render_run_command(
                     qa_issue_warn_count += 1
         qa_enforce_failed = qa_enforce and render_qa_has_error_issues(render_qa_payload)
 
+    # Event-log rows are assembled from saved artifact paths and stable ids so
+    # replay and diff tools can compare runs without stdout parsing.
     # -- optional event log ----------------------------------------------------
     if event_log_out_path is not None:
         def _ordered_unique(values: list[str]) -> list[str]:
@@ -1406,6 +1436,8 @@ def _run_render_run_command(
             force=event_log_force,
         )
 
+    # Keep stdout to one stable JSON summary. CLI wrappers and GUI callers use
+    # this as the machine-readable success surface for the whole command.
     # -- deterministic stdout summary ------------------------------------------
     plan_id = render_plan_payload.get("plan_id", "")
     job_count = len(render_plan_payload.get("jobs", []))

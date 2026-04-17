@@ -4713,6 +4713,8 @@ async function runExecuteCommand(
   appendMeta(ui, stage, `$ mmo ${args.map(quoteArg).join(" ")}`);
   let result: MmoRunResult;
   try {
+    // Short-lived stages still feed the shared timeline contract. Desktop
+    // failure notes and smoke summaries assume every stage logs the same way.
     result = await executeMmo(args, {
       onLogLine: (line) => {
         appendTimeline(ui, stage, line.kind, line.text, line.payload);
@@ -4736,6 +4738,8 @@ async function runSpawnCommand(
   appendMeta(ui, stage, `$ mmo ${args.map(quoteArg).join(" ")}`);
   let result: MmoRunResult;
   try {
+    // Streaming stages share the same timeline shape as executeMmo, but they
+    // also surface live payloads for render progress and long-running steps.
     result = await spawnMmo(args, {
       onLogLine: (line) => {
         appendTimeline(ui, stage, line.kind, line.text, line.payload);
@@ -4755,6 +4759,8 @@ function assertSuccess(result: MmoRunResult, stageLabel: string): void {
   if (result.code === 0) {
     return;
   }
+  // Desktop users often only see this summary text, not the full timeline. Keep
+  // the first meaningful failure clue attached to the stage-specific guidance.
   const reason = firstMeaningfulFailureLine(result);
   throw new Error(
     [
@@ -4767,6 +4773,8 @@ function assertSuccess(result: MmoRunResult, stageLabel: string): void {
 
 function sidecarLaunchFailure(stage: CommandStage, error: unknown): Error {
   const detail = error instanceof Error ? error.message : String(error);
+  // Launch failures mean the packaged helper never came up, which is a
+  // different class of problem from a started command returning a bad exit code.
   const nextStep = stage === "doctor"
     ? "Reinstall the packaged app or try a fresh release asset, then run Doctor again."
     : "Run Doctor first. If Doctor also fails, reinstall the packaged app or try a fresh release asset.";
@@ -4830,6 +4838,8 @@ async function inspectSceneLocks(
   renderScene(ui);
 
   try {
+    // The project draft is the authority for editable scene-lock rows. Reload
+    // from RPC before trusting whatever the user last had in the form.
     const result = await runMmoRpc<JsonObject>("scene.locks.inspect", {
       project_dir: buildWorkflowPaths(workspaceDir).projectDir,
     });
@@ -4889,6 +4899,8 @@ async function refreshScenePreviewFromSavedLocks(
   let previewScenePath = projectScenePath;
   let previewMode: "project_draft" | "workspace_scene" = "project_draft";
 
+  // Prefer rebuilding the workspace scene when the derived inputs exist. That
+  // keeps the preview aligned with the next render, not only the project draft.
   if (hasWorkspaceSceneInputs) {
     const buildArgs = [
       "scene",
@@ -4975,6 +4987,8 @@ async function saveSceneLocks(ui: AppUi): Promise<void> {
     const savedScenePath = asString(saveResult.scene_path).trim();
     ui.inputs.sceneLocksPath.value = savedSceneLocksPath;
 
+    // Refresh editor rows first, then refresh preview and lint from the saved
+    // file. Skipping either step leaves the Scene screen showing stale state.
     await inspectSceneLocks(ui, {
       autoFillMode: "always",
       quiet: true,
@@ -5008,6 +5022,8 @@ async function saveSceneLocks(ui: AppUi): Promise<void> {
 }
 
 async function refreshResultsArtifacts(paths: WorkflowPaths): Promise<void> {
+  // Results is a three-artifact view. Load receipt, manifest, and QA together
+  // so the desktop summary does not mix outputs from different runs.
   state.artifacts.receipt = await readArtifactJson<JsonObject>(paths.renderReceiptPath);
   state.artifacts.manifest = await readArtifactJson<JsonObject>(paths.renderManifestPath);
   state.artifacts.qa = await readArtifactJson<JsonObject>(paths.renderQaPath);
@@ -5018,6 +5034,8 @@ async function refreshResultsArtifacts(paths: WorkflowPaths): Promise<void> {
 
 function compareQaPath(candidatePath: string): string {
   const workspaceDir = workspaceDirFromArtifactPath(candidatePath);
+  // Prefer the QA file from the compared run's workspace when possible. Falling
+  // back to a sibling path keeps file-based compare inputs on the same contract.
   if (workspaceDir) {
     return joinPath(workspaceDir, "render_qa.json");
   }
@@ -5028,6 +5046,8 @@ async function refreshCompareArtifacts(paths: WorkflowPaths, aPath: string, bPat
   state.artifacts.compare = await readArtifactJson<JsonObject>(paths.compareReportPath);
   state.artifactSources.comparePath = paths.compareReportPath;
 
+  // Compare compensation and warnings depend on both render QA siblings, not
+  // only on compare_report.json inside the current workspace.
   const aQaPath = compareQaPath(aPath);
   const bQaPath = compareQaPath(bPath);
   state.artifacts.compareAQa = await readArtifactJson<JsonObject>(aQaPath);
@@ -5085,6 +5105,8 @@ async function runValidate(ui: AppUi, controller: ReturnType<typeof initDesignSy
   ui.output.validate.textContent = `Refreshing project scaffold in\n${paths.projectDir}`;
   updateRuntimeMessage(ui, "Validating project workspace artifacts.");
 
+  // The desktop flow treats the project folder as derived state. Rebuild it
+  // before validation so stale project files do not survive between runs.
   const initResult = await runExecuteCommand(ui, "validate", [
     "project",
     "init",
@@ -5210,6 +5232,8 @@ async function runScene(ui: AppUi, controller: ReturnType<typeof initDesignSyste
   const lintResult = await runExecuteCommand(ui, "scene", lintArgs);
   await refreshSceneArtifacts(paths);
   try {
+    // Scene artifacts remain valid even if the lock editor cannot hydrate. Keep
+    // that editor refresh best-effort so the build result stays visible.
     await inspectSceneLocks(ui, {
       autoFillMode: "if-empty",
       quiet: true,
@@ -5237,6 +5261,8 @@ async function runScene(ui: AppUi, controller: ReturnType<typeof initDesignSyste
 async function runRender(ui: AppUi, controller: ReturnType<typeof initDesignSystem>): Promise<void> {
   const { layoutStandard, paths, renderTarget, sceneLocksPath } = collectRenderInputs(ui);
   setStageStatus(ui.stages.render, "running", "Running");
+  // Record the cancel-file path before launch. The render cancel button talks to
+  // the sidecar through that file, not through an in-process hook.
   state.currentCancelPath = buildRenderCancelPath(paths);
   applyBusyState(ui);
   ui.output.render.textContent = `Launching safe-render for ${renderTarget}`;
@@ -5293,6 +5319,8 @@ async function runRender(ui: AppUi, controller: ReturnType<typeof initDesignSyst
     state.artifacts.manifest,
     state.artifacts.qa,
   );
+  // Exit code 0 is not enough here. Receipt and manifest decide whether the
+  // stage was a clean pass, a partial success, or a pass without a master.
   const renderStageState: StageState = result.code !== 0
     ? "fail"
     : (renderOutcome?.bucket === "partial_success" ? "warn" : "pass");
@@ -5341,6 +5369,8 @@ async function runCompare(ui: AppUi): Promise<void> {
     "--out",
     paths.compareReportPath,
   ]);
+  // Refresh the compare report and both QA siblings together. Audition gain and
+  // compensation notes depend on that combined evidence set.
   await refreshCompareArtifacts(paths, aPath, bPath);
   await refreshCompareAuditionSources(ui);
   renderCompare(ui);
@@ -5364,6 +5394,8 @@ async function runWithBusy(
   action: () => Promise<void>,
   clearLogs = false,
 ): Promise<void> {
+  // Only one sidecar stage may own desktop state at a time. Overlapping runs
+  // would interleave logs, artifact refreshes, and busy-state controls.
   if (state.busyStage !== null) {
     return;
   }
@@ -5396,6 +5428,8 @@ async function runWithBusyStrict<T>(
   action: () => Promise<T>,
   clearLogs = false,
 ): Promise<T> {
+  // Strict callers need the overlap error back so save and import flows do not
+  // silently stomp on another stage that already owns the desktop state.
   if (state.busyStage !== null) {
     throw new Error(`Another stage is already running: ${state.busyStage}`);
   }
@@ -6336,6 +6370,8 @@ window.addEventListener("DOMContentLoaded", () => {
     }
   };
 
+  // Imported artifacts become the active screen authority until a new stage run
+  // overwrites them. Keep payload and source path updates in the same handler.
   const loadValidationArtifact = (payload: JsonObject, sourceName: string) => {
     state.artifacts.validation = payload;
     state.artifactSources.validationPath = sourceName;
@@ -6390,6 +6426,8 @@ window.addEventListener("DOMContentLoaded", () => {
   const loadCompareReportArtifact = (payload: JsonObject, sourceName: string) => {
     state.artifacts.compare = payload;
     state.artifactSources.comparePath = sourceName;
+    // Compare report imports can rewrite the derived audition gain immediately.
+    // Apply that before the Compare screen becomes active again.
     applyDerivedCompareCompensation(true);
     renderAll(ui);
     scheduleCompareAuditionRefresh(ui);
@@ -6538,6 +6576,8 @@ window.addEventListener("DOMContentLoaded", () => {
   };
 
   void (async () => {
+    // Startup restores recents first, then optional smoke mode, then on-disk
+    // artifacts. That order keeps smoke runs isolated from persisted UI state.
     state.recentPaths = await loadRecentPaths();
     renderAll(ui);
 

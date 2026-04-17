@@ -127,6 +127,8 @@ def load_render_targets_registry(path: Path | None = None) -> RenderTargetsRegis
     if not isinstance(payload, dict):
         raise ValueError(f"Render targets YAML root must be a mapping: {resolved_path}")
 
+    # Schema validation runs before layout resolution so malformed packaged data
+    # fails with a registry error, not a later planning or CLI symptom.
     _validate_payload_against_schema(
         payload,
         schema_path=schemas_dir() / "render_targets.schema.json",
@@ -145,6 +147,8 @@ def load_render_targets_registry(path: Path | None = None) -> RenderTargetsRegis
         raise ValueError("Render targets registry has non-string target_id values.")
 
     sorted_target_ids = sorted(target_ids)
+    # Target order is part of the packaged contract because CLI help, token
+    # resolution, and receipts list targets in registry order.
     if target_ids != sorted_target_ids:
         raise ValueError(f"Render targets must be sorted by target_id: {resolved_path}")
     if len(sorted_target_ids) != len(set(sorted_target_ids)):
@@ -161,6 +165,8 @@ def load_render_targets_registry(path: Path | None = None) -> RenderTargetsRegis
 
         target_id = row["target_id"]
         layout_id = row["layout_id"]
+        # Every target must bind to a known layout id so channel counts and
+        # filename routing never drift away from the layout registry.
         if layout_id not in known_layouts:
             known_ids = layout_registry.list_layout_ids()
             raise ValueError(
@@ -173,6 +179,8 @@ def load_render_targets_registry(path: Path | None = None) -> RenderTargetsRegis
             channel_order = [str(item) for item in row["channel_order"]]
         else:
             channel_order_layout_id = row["channel_order_layout_id"]
+            # channel_order_layout_id lets the target reuse an existing layout's
+            # speaker order instead of copying another authoritative list.
             if channel_order_layout_id not in known_layouts:
                 known_ids = layout_registry.list_layout_ids()
                 raise ValueError(

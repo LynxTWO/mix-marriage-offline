@@ -182,6 +182,8 @@ class WatchBatchTracker:
             if self._signatures.get(batch_key) != signature:
                 changed_stem_sets.append(stems_dir)
 
+        # Replace the whole signature map each pass so deleted or renamed stem
+        # sets stop generating work once they disappear from the watch root.
         self._signatures = current_signatures
         return changed_stem_sets
 
@@ -202,6 +204,8 @@ class _DirtyState:
         with self._lock:
             if not self._dirty:
                 return False
+            # Wait for a quiet window before scanning so MMO does not hash or run
+            # a batch while stems are still being copied into place.
             if self._clock() - self._last_change_s < settle_seconds:
                 return False
             self._dirty = False
@@ -359,6 +363,8 @@ def batch_out_dir_for_stems_dir(
         slug = "root"
     else:
         slug = "__".join(_slugify_path_token(part) for part in batch_key.split("/"))
+    # Keep batch paths stable across reruns, but add a short hash so two
+    # different relative paths cannot collapse to the same slug.
     key_hash = hashlib.sha1(batch_key.encode("utf-8")).hexdigest()[:8]
     return out_root.resolve() / f"{slug}__{key_hash}"
 
@@ -507,6 +513,8 @@ def _process_changed_stem_sets(
     if queue_listener is not None:
         queue_listener(queue_state.snapshot())
 
+    # Process one batch at a time. Concurrent watch renders would race on CLI
+    # output directories and make failure recovery harder to reason about.
     for item in queue_items:
         if queue_listener is not None:
             queue_listener(queue_state.mark_running(item.batch_key))

@@ -211,6 +211,8 @@ def _validate_preset_index_basic(index: dict[str, Any], *, index_path: Path) -> 
 
     sorted_ids = sorted(item["preset_id"] for item in normalized_presets)
     actual_ids = [item["preset_id"] for item in normalized_presets]
+    # Keep preset order explicit in the index so CLI, GUI, and docs all diff the
+    # same packaged authority instead of each caller re-sorting ad hoc.
     if actual_ids != sorted_ids:
         raise ValueError(f"Preset index must be sorted by preset_id: {index_path}")
 
@@ -330,6 +332,8 @@ def _validate_preset_index_basic(index: dict[str, Any], *, index_path: Path) -> 
 
     sorted_pack_ids = sorted(item["pack_id"] for item in normalized_packs)
     actual_pack_ids = [item["pack_id"] for item in normalized_packs]
+    # Pack order is part of the shipped operator-facing catalog. Fail here if
+    # the packaged index drifts instead of silently reordering it at runtime.
     if actual_pack_ids != sorted_pack_ids:
         raise ValueError(f"Preset index packs must be sorted by pack_id: {index_path}")
 
@@ -340,6 +344,8 @@ def _validate_preset_index_basic(index: dict[str, Any], *, index_path: Path) -> 
 def load_preset_index(presets_dir: Path) -> dict[str, Any]:
     index_path = presets_dir / "index.json"
     index = _load_json_object(index_path, label="Preset index")
+    # Normalize and enforce cross-entry rules before schema validation so the
+    # returned payload is the one every caller shares.
     normalized = _validate_preset_index_basic(index, index_path=index_path)
     _validate_payload_against_schema(
         normalized,
@@ -505,4 +511,6 @@ def load_preset_run_config(presets_dir: Path, preset_id: str) -> dict[str, Any]:
 
     normalized = normalize_run_config(preset_payload)
     normalized["preset_id"] = normalized_preset_id
+    # Normalize again after stamping preset_id so callers get the same canonical
+    # run config shape whether they load a preset directly or merge it later.
     return normalize_run_config(normalized)

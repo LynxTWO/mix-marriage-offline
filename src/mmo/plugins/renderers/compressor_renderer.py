@@ -132,7 +132,8 @@ def _parse_comp_params(rec: Dict[str, Any], sample_rate_hz: int) -> Optional[Dic
     if any(v is None for v in (threshold_db, ratio, attack_ms, release_ms)):
         return None
 
-    # Clamp within safety gates
+    # These bounds protect stems from destructive settings. They are safety
+    # limits, not a promise to honor every incoming recommendation literally.
     threshold_db = max(_MIN_THRESHOLD_DB, min(_MAX_THRESHOLD_DB, threshold_db))  # type: ignore[arg-type]
     ratio = max(_MIN_RATIO, min(_MAX_RATIO, ratio))  # type: ignore[arg-type]
     attack_ms = max(_MIN_ATTACK_MS, min(_MAX_ATTACK_MS, attack_ms))  # type: ignore[arg-type]
@@ -209,6 +210,8 @@ def _render_compressed(
     all_output: list[float] = []
 
     try:
+        # Buffer the full output in memory so clip-risk can reject the stem
+        # before any partially-written hot file reaches disk.
         for chunk in iter_wav_float64_samples(source_path, error_context="compressor render"):
             pending.extend(chunk)
             needed = _CHUNK_FRAMES * channels
@@ -289,7 +292,8 @@ class CompressorRenderer(RendererPlugin):
             and _stem_id_from_rec(rec) is not None
         ]
 
-        # Group by stem (one output file per stem, params from first applicable rec)
+        # One stem yields one output file. Stable grouping keeps repeated runs
+        # from changing which recommendation becomes the representative row.
         grouped: Dict[str, List[Dict[str, Any]]] = {}
         for rec in applicable:
             stem_id = _stem_id_from_rec(rec)
@@ -301,6 +305,8 @@ class CompressorRenderer(RendererPlugin):
 
         for stem_id in sorted(grouped.keys()):
             recs = grouped[stem_id]
+            # This corrective path is intentionally WAV-only. The safer
+            # multiformat renderers already own FFmpeg-backed rewrite rules.
             source_path = _resolve_stem_path(stems_by_id, stem_id)
             if source_path is None or source_path.suffix.lower() not in _WAV_EXTENSIONS:
                 for rec in recs:
@@ -327,7 +333,8 @@ class CompressorRenderer(RendererPlugin):
                                     "reason": "unsupported_format", "gate_summary": ""})
                 continue
 
-            # Use first valid rec's params
+            # Use the first valid recommendation in deterministic order so the
+            # same stem does not flip between conflicting compressor settings.
             comp_params: Optional[Dict[str, float]] = None
             representative: Optional[Dict[str, Any]] = None
             for rec in sorted(recs, key=lambda r: _coerce_str(r.get("recommendation_id"))):

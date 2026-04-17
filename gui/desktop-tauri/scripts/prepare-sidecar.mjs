@@ -28,7 +28,8 @@ function formatCandidate(candidate) {
 }
 
 // Build an ordered list of [command, ...args] candidates.
-// Priority: explicit env overrides > setup-python location > generic names.
+// Priority matters here because release and CI often pin Python explicitly.
+// Generic PATH names should only win when no stronger signal exists.
 const rawCandidates = [];
 
 if (typeof process.env.PYTHON === "string" && process.env.PYTHON.trim()) {
@@ -56,7 +57,8 @@ if (process.platform === "win32") {
 
 rawCandidates.push(["python3"]);
 
-// De-duplicate by the resolved command string (first element + any fixed args).
+// De-duplicate by the resolved command string so the same interpreter does not
+// appear twice under different env names and produce duplicate failure noise.
 const seen = new Set();
 const pythonCandidates = [];
 for (const candidate of rawCandidates) {
@@ -86,6 +88,8 @@ for (const candidate of pythonCandidates) {
     stdio: "inherit",
   });
   if (result.error && "code" in result.error && result.error.code === "ENOENT") {
+    // Missing binaries are normal while walking the fallback list. Keep going
+    // until one candidate launches or the list is exhausted.
     continue;
   }
   if (result.error) {
@@ -98,11 +102,15 @@ for (const candidate of pythonCandidates) {
   if (result.status !== 0) {
     console.error(`MMO sidecar build failed using Python interpreter: ${attemptedCandidate}`);
   }
+  // Stop after the first real process result. Later candidates would hide which
+  // interpreter the developer or CI job used.
   exitCode = result.status ?? 1;
   break;
 }
 
 if (exitCode === null) {
+  // Surface every attempted label so missing-Python failures show the exact
+  // search order instead of looking like one generic launcher error.
   console.error(
     "Unable to locate a Python interpreter. Tried:\n" +
     attempted.map((c) => `  ${c}`).join("\n") +

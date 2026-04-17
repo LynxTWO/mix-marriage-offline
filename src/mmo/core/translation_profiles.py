@@ -102,6 +102,8 @@ def load_translation_profiles(path: Path | None = None) -> dict[str, dict[str, A
 
     profiles = _profiles_map(payload)
     _validate_profile_order(profiles, path=resolved_path)
+    # The returned mapping stays sorted because translation CLI output and cache
+    # receipts compare profile ids directly.
     return {
         profile_id: dict(profiles[profile_id])
         for profile_id in sorted(profiles.keys())

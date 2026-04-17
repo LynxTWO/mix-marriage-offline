@@ -720,6 +720,8 @@ def _call_json_command(
     if not payload_text:
         return {}
 
+    # RPC callers expect one JSON object or one structured error.
+    # Mixed stdout would make the wire format depend on debug text.
     try:
         payload = json.loads(payload_text)
     except json.JSONDecodeError as exc:
@@ -1153,6 +1155,7 @@ def _handle_scene_locks_save(params: dict[str, Any]) -> dict[str, Any]:
             "version": SCENE_BUILD_LOCKS_VERSION,
             "overrides": merged_overrides,
         }
+        # Save the lock file first. The scene draft below is a derived view of it.
         _write_scene_locks_yaml(scene_locks_path, locks_payload)
 
         updated_scene = _validated_scene_with_updates(
@@ -1465,6 +1468,8 @@ def _handle_project_render_run(params: dict[str, Any]) -> dict[str, Any]:
         default=False,
     )
     execute_out_path = Path(execute_out) if isinstance(execute_out, str) else None
+    # This RPC can write plans, reports, receipts, and audio outputs on disk.
+    # Keep the write surface behind explicit param validation.
     return _call_json_command(
         method="project.render_run",
         invoke=lambda: _run_project_render_run(
@@ -1693,6 +1698,8 @@ def _handle_plugin_market_install(params: dict[str, Any]) -> dict[str, Any]:
         default=None,
     )
 
+    # Installing a marketplace entry writes code into a local plugin root.
+    # Keep the writable surface explicit and path-based.
     try:
         return install_plugin_market_entry(
             plugin_id=plugin_id,
@@ -1766,6 +1773,8 @@ def _run_gui_rpc(
                 params = raw_request.get("params", {})
 
                 try:
+                    # Every handler below can touch local files.
+                    # Reject malformed requests before dispatch.
                     if not isinstance(method, str) or not method.strip():
                         raise _RpcRequestError(
                             code="RPC.INVALID_REQUEST",
@@ -1798,6 +1807,8 @@ def _run_gui_rpc(
                         message=exc.message,
                     )
                 except Exception:
+                    # Keep unexpected failures opaque on the wire.
+                    # Raw tracebacks would leak process internals to clients.
                     response = _error_response(
                         request_id,
                         code="RPC.INTERNAL_ERROR",

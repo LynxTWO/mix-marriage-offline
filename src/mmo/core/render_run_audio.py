@@ -701,6 +701,8 @@ def validate_and_normalize_plugin_chain(
     if not isinstance(raw_chain, list) or not raw_chain:
         raise ValueError(f"{chain_label} must be a non-empty list when provided.")
 
+    # Normalize every stage before render execution starts. The job loop trusts
+    # this shape and only re-checks runtime-only constraints later.
     normalized_chain: list[dict[str, Any]] = []
     ordered_errors: list[str] = []
     ordered_notes: list[str] = []
@@ -885,6 +887,8 @@ def build_render_report_with_audio(
         requested_bit_depth=_coerce_int(options.get("bit_depth")),
         source_bit_depth=source_bit_depth,
     )
+    # Normalize the chain once before the job loop so every job sees the same
+    # validated stage order, notes, and refusal behavior.
     plugin_chain, plugin_chain_notes = _plugin_chain_from_request(request_payload)
     plugin_chain_enabled = bool(plugin_chain)
     plugin_chain_force_float64 = any(
@@ -927,6 +931,8 @@ def build_render_report_with_audio(
         job_id = _coerce_str(job.get("job_id")).strip() or "JOB.001"
         output_formats = _job_output_formats_or_raise(job)
         planned_outputs = _planned_outputs_by_format(job)
+        # Build one metadata plan per job, then reuse it across formats. Output
+        # writers should not reinterpret request fields on their own.
         trace_context = {
             **_coerce_dict(job),
             "request_payload": request_payload,
@@ -1005,6 +1011,9 @@ def build_render_report_with_audio(
             and source_bit_depth == output_bit_depth
             and source_channel_count == 2
         )
+        # Decide decode, encode, trace, and metadata needs before any audio work
+        # starts. Later branches assume these gates already ruled out impossible
+        # combinations.
         if (
             needs_ffmpeg_decode
             or needs_ffmpeg_encode
@@ -1030,6 +1039,9 @@ def build_render_report_with_audio(
         job_plugin_step_events: list[dict[str, Any]] = []
 
         try:
+            # Keep the execution order stable: mix inputs first, then plugin-chain
+            # single-source renders, then plain decode/write. The receipts and
+            # refusal reasons depend on that branch order.
             if mix_inputs_active:
                 if resolved_mix_inputs is None:
                     raise RenderRunRefusalError(
@@ -1162,6 +1174,8 @@ def build_render_report_with_audio(
                 [] if plugin_chain_enabled else list(trace_embedded_keys)
             )
 
+            # Normalize the WAV once before any secondary transcodes so every
+            # deliverable inherits the same deterministic PCM and metadata plan.
             if keep_wav_output and (capture_execute_trace or wav_metadata_args):
                 if ffmpeg_cmd_for_encode is None:
                     if capture_execute_trace:
@@ -1185,6 +1199,9 @@ def build_render_report_with_audio(
                         command_rows=ffmpeg_command_rows,
                         metadata_args=wav_metadata_args,
                     )
+            # Plain stereo renders embed the trace payload in the WAV itself.
+            # Plugin-chain renders already preserve a separate stage-by-stage
+            # evidence trail for later review.
             if keep_wav_output and not plugin_chain_enabled:
                 write_wav_ixml_chunk(wav_path, build_trace_ixml_payload(trace_metadata))
 
@@ -1297,6 +1314,8 @@ def build_render_report_with_audio(
                 issue_id=ISSUE_RENDER_RUN_ENCODE_FAILED,
                 message="No output paths were produced for render-run execution.",
             )
+        # Each stereo job must own a distinct destination path. Report and QA
+        # rows assume one render result per output file.
         for output_path in output_paths:
             output_path_key = output_path.resolve().as_posix()
             if output_path_key in seen_output_paths:
@@ -1827,6 +1846,8 @@ def _plugin_chain_from_request(
 
     raw_chain = options.get("plugin_chain")
     try:
+        # Map request-shape failures onto render-run issue ids before any output
+        # path or decode work begins.
         normalized_chain, notes = validate_and_normalize_plugin_chain(
             raw_chain,
             chain_label="options.plugin_chain",
@@ -1853,6 +1874,8 @@ def _prevalidate_plugin_chain_static(
     from mmo.dsp.plugins._multiband_common import parse_detector_mode  # noqa: WPS433
     from mmo.dsp.plugins.base import PluginValidationError  # noqa: WPS433
 
+    # Run policy checks that do not need numpy first so callers see the real
+    # stage error instead of an environment error that would hide it.
     for stage in plugin_chain:
         plugin_id = _coerce_str(stage.get("plugin_id")).strip().lower()
         params = _coerce_dict(stage.get("params"))
@@ -1922,6 +1945,8 @@ def _copy_source_wav_for_noop_plugin_chain(
         source_rate_hz = handle.getframerate()
         source_bit_depth = handle.getsampwidth() * 8
 
+    # Exact-copy passthrough is only safe when the source WAV already matches the
+    # promised render contract. Any mismatch has to go through the normal render path.
     if channel_count != 2 or source_rate_hz != sample_rate_hz or source_bit_depth != bit_depth:
         raise RenderRunRefusalError(
             issue_id=ISSUE_RENDER_RUN_OPTION_UNSUPPORTED,
@@ -1967,6 +1992,8 @@ def _copy_source_wav_for_noop_plugin_chain(
         },
     ]
 
+    # Even a no-op copy still runs each stage through the typed and purity
+    # guards so unsupported plugins cannot hide behind the passthrough branch.
     dummy_buffer = AudioBufferF64(
         data=[0.0] * process_ctx.num_channels,
         channels=process_ctx.num_channels,
@@ -2117,6 +2144,8 @@ def _render_wav_with_plugin_chain(
     )
 
     source_where: list[str] = []
+    # Mix-input renders hand in already-decoded stereo samples here so plugin
+    # execution sees the same typed buffer shape as single-file renders.
     if source_samples_interleaved is None:
         rendered_buffer = _read_stereo_source_buffer(
             source_path,
@@ -2166,6 +2195,8 @@ def _render_wav_with_plugin_chain(
         },
     ]
 
+    # Each stage must preserve the stereo buffer contract. Later export and QA
+    # steps trust the channel order, sample rate, and frame shape from this loop.
     for stage_index, stage in enumerate(plugin_chain, start=1):
         plugin_id = _coerce_str(stage.get("plugin_id")).strip().lower()
         params = _coerce_dict(stage.get("params"))

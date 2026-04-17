@@ -142,6 +142,8 @@ def load_roles(path: Path | None = None) -> dict[str, Any]:
 
     roles = _roles_map(payload)
     _validate_role_order(roles, path=resolved_path)
+    # Regex compile failures surface here so classifier and scene tooling never
+    # run with half-valid role inference rules.
     entries = _role_entries(roles)
     _validate_role_regex_patterns(entries)
 
@@ -149,6 +151,8 @@ def load_roles(path: Path | None = None) -> dict[str, Any]:
     meta_payload = roles.get("_meta")
     if isinstance(meta_payload, dict):
         normalized_roles["_meta"] = dict(meta_payload)
+    # Keep the returned registry sorted so downstream classifiers and CLI views
+    # cannot drift based on YAML insertion order.
     for role_id in sorted(entries.keys()):
         normalized_roles[role_id] = dict(entries[role_id])
 

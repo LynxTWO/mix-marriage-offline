@@ -9,6 +9,8 @@ export const REPO_ROOT = path.resolve(_MODULE_DIR, "..", "..");
 function _pythonEnv() {
   const env = { ...process.env };
   const srcPath = path.join(REPO_ROOT, "src");
+  // The python fallback has to work from a repo checkout, so it always prepends
+  // src/ instead of assuming the package is already installed into site-packages.
   if (typeof env.PYTHONPATH === "string" && env.PYTHONPATH.trim()) {
     env.PYTHONPATH = `${srcPath}${path.delimiter}${env.PYTHONPATH}`;
   } else {
@@ -50,6 +52,8 @@ export function buildCliCandidates() {
       env: { ...process.env },
       label: mmoBin,
     },
+    // Keep python -m mmo as a first-class fallback for machines where the CLI
+    // wrapper is missing but the checkout is still runnable.
     pythonFallbackCandidate,
   ];
 }
@@ -162,6 +166,8 @@ export async function runMmoCli(
       };
     }
     const label = candidate.label || _candidateLabel(candidate);
+    // Failure summaries list every attempted candidate so setup drift in the
+    // dev shell shows up as one error, not as a silent fallback.
     const codeText = result.code === null ? "null" : String(result.code);
     const errorText = result.error ? `error=${result.error.message}` : `code=${codeText}`;
     const stderrText = result.stderr.trim();
@@ -190,6 +196,8 @@ export async function runMmoCliJson(args, options = {}) {
       `MMO CLI command returned invalid JSON for (${args.join(" ")}): ${error instanceof Error ? error.message : String(error)}`,
     );
   }
+  // The bridge only accepts object JSON here because callers merge fields by
+  // name. Arrays and scalars would hide a contract mismatch until later.
   if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
     throw new Error(`MMO CLI command returned non-object JSON for (${args.join(" ")}).`);
   }

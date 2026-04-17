@@ -158,5 +158,6 @@ behavior_contract:
   max_integrated_lufs_delta: 0.5
   peak_behavior: "bounded"
   max_true_peak_delta_db: 0.5
-  rationale: "This nonlinear renderer is intentionally looser than the default corrective bounds."
+  rationale: "This nonlinear renderer is intentionally looser than the default
+    corrective bounds."
 ```

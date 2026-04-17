@@ -39,6 +39,8 @@ class StarterTrueMultichannelChecksum:
         tone_written = False
 
         if checksum_matched and channel_index is not None:
+            # Seeded phase proves the example can use deterministic randomness
+            # from process_ctx.seed without touching global RNG state.
             phase = 2.0 * math.pi * ((process_ctx.seed % 1024) / 1024.0)
             frame_count = rendered.shape[1]
             positions = np.arange(frame_count, dtype=np.float64)
@@ -76,6 +78,8 @@ class StarterTrueMultichannelChecksum:
         output_dir=None,
     ):
         del output_dir
+        # Layout-specific examples echo the selected layout into the receipt so
+        # host-side bypasses stay explainable in tests and CLI output.
         target_layout_id = ""
         if isinstance(session, dict):
             raw_target_layout_id = session.get("target_layout_id")

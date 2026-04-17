@@ -2927,6 +2927,8 @@ class PlacementMixdownRenderer(RendererPlugin):
             manifest["notes"] = "missing_output_dir"
             return manifest
 
+        # Placement rendering only runs against a resolved scene. Falling back
+        # to raw session data here would invent speaker intent.
         scene = _build_scene(session)
         if not isinstance(scene, dict):
             manifest["notes"] = "placement_scene_unavailable"
@@ -2964,6 +2966,8 @@ class PlacementMixdownRenderer(RendererPlugin):
             render_intent["stereo_reinterpret_allowed"] = stereo_reinterpret_allowed
             stem_sends = render_intent.get("stem_sends")
             if isinstance(stem_sends, list):
+                # Keep the first bus assignment per stem so later stem-copy
+                # exports reuse the same grouping the master render saw.
                 for row in stem_sends:
                     if not isinstance(row, dict):
                         continue
@@ -2976,6 +2980,8 @@ class PlacementMixdownRenderer(RendererPlugin):
             if not (export_options.export_master or export_options.export_buses):
                 continue
 
+            # Bed decorrelation only activates after a stereo master exists.
+            # Without that reference, the immersive master cannot prove the QA gate.
             enable_bed_decorrelation = (
                 bed_decorrelation_options.enabled
                 and layout_id != "LAYOUT.2_0"
@@ -3032,6 +3038,8 @@ class PlacementMixdownRenderer(RendererPlugin):
                 and isinstance(layout_master_path, Path)
                 and layout_master_path.exists()
             ):
+                # Similarity QA can rewrite the layout output after the first
+                # render. Keep notes and plugin metadata in sync with the final result.
                 try:
                     layout_outputs, final_layout_notes, similarity_result = (
                         _run_layout_similarity_fallback_sequence(
@@ -3102,6 +3110,8 @@ class PlacementMixdownRenderer(RendererPlugin):
             )
         )
         manifest["outputs"] = outputs
+        # Preserve degraded or collapsed outcomes in the manifest notes. Review
+        # tools still need the final gate result even when files were written.
         if notes:
             manifest["notes"] = ";".join(sorted(set(notes)))
         else:

@@ -16,6 +16,8 @@ _FFMPEG_CONTAINER_ARGS_BY_FORMAT: dict[str, tuple[str, ...]] = {
     "alac": ("-movflags", "use_metadata_tags"),
 }
 _FFMPEG_DETERMINISM_FLAGS: tuple[str, ...] = (
+    # Strip source metadata and pin single-threaded bitexact mode so repeated
+    # exports of the same WAV input do not drift across hosts.
     "-map_metadata",
     "-1",
     "-map_chapters",
@@ -104,11 +106,15 @@ def build_ffmpeg_transcode_command(
         *ffmpeg_determinism_flags(for_wav=False),
     ]
     if metadata_args is not None:
+        # Metadata injection stays explicit and format-scoped so callers decide
+        # which trace fields survive each export.
         command.extend(str(item) for item in metadata_args)
     command.extend(encode_args)
     command.extend(_FFMPEG_CONTAINER_ARGS_BY_FORMAT.get(fmt, ()))
     normalized_layout = (channel_layout or "").strip()
     if normalized_layout:
+        # Only pass a channel layout when the caller resolved one. Guessing
+        # here can stamp the wrong speaker map into a valid audio file.
         command.extend(["-channel_layout", normalized_layout])
     command.append(_path_arg(out_path))
     return command
@@ -149,6 +155,8 @@ def transcode_wav_to_format(
     if completed.returncode == 0:
         return
 
+    # Prefer stderr when present so export receipts point at the actual ffmpeg
+    # failure instead of a generic non-zero exit.
     message = completed.stderr.strip() or completed.stdout.strip()
     if message:
         raise ValueError(f"ffmpeg encode failed: {message}")

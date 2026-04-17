@@ -53,6 +53,8 @@ function _uiHintMap(uiHints) {
     if (typeof pointer !== "string") {
       continue;
     }
+    // Browser forms only consume property-level x_mmo_ui rows. The schema
+    // still owns which fields exist and what they are called.
     const match = pointer.match(/^\/properties\/([^/]+)\/x_mmo_ui$/);
     if (!match) {
       continue;
@@ -140,6 +142,8 @@ function _resolveFieldNameFromParamRef(paramRef, fieldsByName, fieldsByLowerName
     return byLowerName;
   }
 
+  // PARAM.* refs only win when the tail resolves to one field name. Ambiguous
+  // matches would reorder the wrong control in the browser.
   const canonicalTail = _normalizedParamToken(normalized.split(".").pop());
   const canonicalMatches = fieldsByCanonical.get(canonicalTail) || [];
   if (canonicalMatches.length === 1) {
@@ -178,6 +182,8 @@ export function resolveFieldStep(field, modifierState = {}) {
   if (!_isPositiveNumber(field.fineStep)) {
     return field.step;
   }
+  // Fine-step modifiers are local editing helpers. They must not change the
+  // stored schema step or the field's saved value shape.
   const modifierKey = _normalizeModifierKey(field.modifierKey);
   const isFine = _isObject(modifierState) && modifierState[modifierKey] === true;
   return isFine ? field.fineStep : field.step;
@@ -196,6 +202,8 @@ export function orderFieldsByLayout(fields, uiLayout) {
     return { orderedFields: normalizedFields, moreFields: [], hasLayout: false };
   }
 
+  // Layout widgets can reorder known schema fields, but they do not get to
+  // invent or drop fields. Unmatched schema fields stay visible in moreFields.
   const fieldsByName = new Map(normalizedFields.map((field) => [field.name, field]));
   const fieldsByLowerName = new Map(normalizedFields.map((field) => [field.name.toLowerCase(), field.name]));
   const fieldsByCanonical = new Map();
@@ -238,6 +246,8 @@ export function buildFormFields(configSchema, uiHints = []) {
   const required = new Set(requiredRaw.filter((value) => typeof value === "string"));
   const hints = _uiHintMap(uiHints);
 
+  // Sort property names first so the browser form stays stable even when the
+  // incoming schema object order changes between loads.
   return Object.keys(properties)
     .sort()
     .map((name) => {
@@ -252,6 +262,8 @@ export function buildFormFields(configSchema, uiHints = []) {
         ? hintObject.widget.trim().toLowerCase()
         : "";
 
+      // Hints can refine presentation, but schema type and enum state still
+      // decide the safe fallback input kind.
       let inputKind = "json";
       if (widget === "knob" || widget === "fader") {
         inputKind = "range";

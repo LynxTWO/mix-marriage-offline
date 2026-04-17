@@ -80,6 +80,8 @@ def _resolve_built_binary(
         for path in output_dir.iterdir()
         if path.is_file() and path.name.startswith(binary_stem)
     )
+    # Backends do not always agree on the final filename. Keep the fallback
+    # search deterministic so release automation picks one artifact shape.
     if not candidates:
         raise BuildError(
             f"{backend_label} completed but no binary matching '{binary_stem}' was produced."
@@ -104,6 +106,8 @@ def _build_with_pyinstaller(
     if importlib.util.find_spec("PyInstaller") is None:
         raise BuildError(f"PyInstaller is not installed in {sys.executable}.")
 
+    # Split PyInstaller work, spec, and dist paths under one temp build root so
+    # a failed backend does not pollute the release output directory.
     dist_dir = build_dir / "pyinstaller_dist"
     work_dir = build_dir / "pyinstaller_work"
     spec_dir = build_dir / "pyinstaller_spec"
@@ -305,6 +309,8 @@ def _build_artifact(
             failures.append(message)
             print(f"warning: {artifact_name}: {message}", file=sys.stderr)
 
+    # Keep every backend failure in stderr so release CI can tell whether the
+    # fallback path was expected or whether both builders drifted.
     if built_binary is None or selected_backend is None:
         print(f"error: all binary build backends failed for {artifact_name}.", file=sys.stderr)
         for failure in failures:
@@ -314,6 +320,8 @@ def _build_artifact(
     final_binary = output_dir / binary_name
     shutil.copy2(built_binary, final_binary)
     if not sys.platform.startswith("win"):
+        # Copying through the release dir can drop exec bits on Unix. Restore
+        # them here so smoke and upload steps do not depend on backend quirks.
         final_binary.chmod(final_binary.stat().st_mode | 0o111)
 
     binary_checksum = _write_sha256(final_binary)
@@ -355,6 +363,8 @@ def main() -> int:
 
     build_dir = output_dir / ".binary-build"
     if build_dir.exists():
+        # Build scratch state must start clean so fallback output never reuses a
+        # stale binary from an earlier backend or platform run.
         shutil.rmtree(build_dir)
     build_dir.mkdir(parents=True, exist_ok=True)
 

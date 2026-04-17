@@ -342,12 +342,17 @@ def _resolve_install_source_path(
     if any(part == ".." for part in normalized_relative.parts):
         raise ValueError(f"Install source path cannot escape root: {relative_path}")
 
+    # Marketplace entries stay inside trusted MMO data roots.
+    # Relative-only lookup keeps the offline index from widening install scope.
     candidates: list[Path] = []
     candidates.append(_resolve_install_asset_base(market_index) / normalized_relative)
 
     source_path_raw = market_index.get("source_path")
     if isinstance(source_path_raw, str) and source_path_raw.strip():
         source_path = Path(source_path_raw).resolve()
+        # The index may live beside the install assets or inside a generated
+        # snapshot tree. Probe both relative locations without widening beyond
+        # the repo-managed data roots above.
         candidates.append(source_path.parent / normalized_relative)
         candidates.append(source_path.parent.parent / normalized_relative)
 
@@ -382,6 +387,8 @@ def _sha256_file(path: Path) -> str:
 def _copy_asset_if_changed(*, source: Path, destination: Path) -> bool:
     if destination.exists():
         try:
+            # Reinstall must be idempotent.
+            # Byte-for-byte equality means callers can report no state change.
             if source.read_bytes() == destination.read_bytes():
                 return False
         except OSError:
@@ -415,6 +422,8 @@ def _is_entry_installable(
         return False
 
     try:
+        # The marketplace list must answer installable or unavailable without
+        # mutating the user plugin root or importing plugin code.
         manifest_rel = _relative_path_without_plugins_prefix(
             manifest_path,
             field_name="manifest_path",
@@ -539,6 +548,8 @@ def install_plugin_market_entry(
         label=f"Plugin install manifest for {normalized_plugin_id}",
     )
 
+    # The index is only a locator. The manifest on disk is the authority for
+    # plugin identity and type before anything is copied into a writable root.
     manifest_plugin_id = manifest_payload.get("plugin_id")
     if manifest_plugin_id != normalized_plugin_id:
         raise ValueError(
@@ -554,6 +565,8 @@ def install_plugin_market_entry(
                 f"index={expected_type!r}, manifest={manifest_plugin_type!r}"
             )
 
+    # Resolve the module before writing files so a broken entrypoint does not
+    # leave half-installed code in the target plugin root.
     entrypoint = manifest_payload.get("entrypoint")
     if not isinstance(entrypoint, str) or not entrypoint.strip():
         raise ValueError(
@@ -573,6 +586,8 @@ def install_plugin_market_entry(
         if plugins_dir is not None
         else default_user_plugins_dir().expanduser().resolve()
     )
+    # Marketplace installs write into a writable external root, never back into
+    # packaged plugin data. That keeps shipped data read-only and reinstallable.
     target_manifest = target_root / manifest_rel
     target_module = target_root / module_rel
 
@@ -629,6 +644,8 @@ def update_plugin_market_snapshot(
         else default_plugin_market_snapshot_path()
     )
 
+    # The cached snapshot is a normalized offline view for UI consumers.
+    # Keep it stable even if the source index lives at a different path.
     snapshot_payload = {
         "schema_version": PLUGIN_MARKET_SCHEMA_VERSION,
         "market_id": market_index["market_id"],

@@ -90,6 +90,8 @@ def _validate_relative_posix_path(path_text: Any, *, field_name: str) -> str:
     normalized = path_text.replace("\\", "/").strip()
     if not normalized:
         raise ValueError(f"{field_name} must not be empty.")
+    # Saved session receipts must stay relocatable with the project. Absolute
+    # paths or parent escapes would turn load into a write-outside-project bug.
     if normalized.startswith("/") or _WINDOWS_ABS_PATH_RE.match(normalized):
         raise ValueError(f"{field_name} must be a project-relative path.")
 
@@ -122,6 +124,8 @@ def normalize_project_session(payload: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(payload, dict):
         raise ValueError("Project session payload must be an object.")
 
+    # Reject unknown top-level keys so save/load stays tied to the documented
+    # session contract instead of inheriting stray workspace state over time.
     unknown = sorted(set(payload.keys()) - _PROJECT_SESSION_KEYS)
     if unknown:
         raise ValueError(f"Unknown project session field(s): {', '.join(unknown)}")
@@ -176,6 +180,8 @@ def normalize_project_session(payload: dict[str, Any]) -> dict[str, Any]:
         seen_paths.add(path_text)
         receipts.append({"path": path_text, "payload": dict(receipt_payload)})
 
+    # Sort receipt rows so the saved session stays portable and diff-stable
+    # even if the source files were discovered in a different order.
     receipts.sort(key=lambda item: item["path"])
     normalized = {
         "schema_version": PROJECT_SESSION_SCHEMA_VERSION,
@@ -238,6 +244,8 @@ def build_project_session_payload(project_dir: Path) -> dict[str, Any]:
     scene_payload = _load_json_object(scene_path, label="Project scene")
     history_payload = _read_history_jsonl(resolved_project_dir / _PROJECT_HISTORY_REL_PATH)
 
+    # Session saves capture only the canonical draft scene, history log, and
+    # allowlisted receipts. That keeps restores narrow and predictable.
     receipts: list[dict[str, Any]] = []
     for rel_path in sorted(path.as_posix() for path in _PROJECT_DEFAULT_RECEIPT_PATHS):
         full_path = resolved_project_dir / rel_path
@@ -262,6 +270,8 @@ def build_project_session_payload(project_dir: Path) -> dict[str, Any]:
 
 def write_project_session(path: Path, project_session: dict[str, Any], *, force: bool) -> dict[str, Any]:
     normalized = normalize_project_session(project_session)
+    # Overwrite checks happen before any write so callers get one clear force
+    # contract for the whole session artifact.
     if path.exists() and not force:
         raise ValueError(f"File exists (use --force to overwrite): {path.as_posix()}")
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -283,6 +293,8 @@ def save_project_session(
     if not resolved_project_dir.is_dir():
         raise ValueError(f"Project directory does not exist: {resolved_project_dir.as_posix()}")
 
+    # The default save target lives inside the project root so session export
+    # stays colocated with the artifacts it can later restore.
     output_path = session_path.resolve() if session_path is not None else default_project_session_path(
         resolved_project_dir
     )
@@ -313,6 +325,8 @@ def load_project_session_into_project(
     scene_path = resolved_project_dir / _PROJECT_SCENE_REL_PATH
     history_path = resolved_project_dir / _PROJECT_HISTORY_REL_PATH
 
+    # Resolve every target before writing anything so duplicate or escaping
+    # receipt paths fail as one preflight step instead of half-restoring a project.
     target_paths: list[Path] = [scene_path, history_path]
     receipt_targets: list[tuple[Path, dict[str, Any], str]] = []
     for receipt in normalized["receipts"]:
@@ -331,6 +345,8 @@ def load_project_session_into_project(
             raise ValueError(f"Project session contains duplicate target path: {resolved_target.as_posix()}")
         seen_targets.add(resolved_target)
 
+    # Force is checked against the whole restore set before writes begin so the
+    # caller does not end up with scene restored but receipts skipped.
     if not force:
         for target_path in target_paths:
             if target_path.exists():
@@ -338,6 +354,8 @@ def load_project_session_into_project(
                     f"File exists (use --force to overwrite): {target_path.as_posix()}"
                 )
 
+    # Restore in dependency order: scene first, then history, then receipts.
+    # Later files may refer back to those canonical project paths.
     scene_path.parent.mkdir(parents=True, exist_ok=True)
     scene_path.write_text(
         json.dumps(normalized["scene"], indent=2, sort_keys=True) + "\n",

@@ -15,6 +15,8 @@ def _resolve_schema_path(schema_arg: str) -> Path:
 
 
 def _validate_plugins(plugins_dir: Path, schema_path: Path) -> Dict[str, Any]:
+    # Validate manifests before any plugin import. Bad metadata should fail
+    # closed here instead of widening the execution surface during load.
     try:
         from mmo.tools.validate_plugins import validate_plugins
     except Exception:
@@ -76,6 +78,9 @@ def main() -> int:
     report = _load_report(report_path)
 
     plugins = load_plugins(plugins_dir)
+    # Run mutations in this order so later stages read the resolved output of
+    # the earlier ones: detectors, resolvers, gates, derived hints, then
+    # routing.
     run_detectors(report, plugins)
     run_resolvers(report, plugins)
     policies_dir = ontology_dir() / "policies"
@@ -93,6 +98,8 @@ def main() -> int:
         )
     apply_routing_plan_to_report(report, report.get("run_config"))
 
+    # Write once at the end. Callers should not treat the in-memory report as a
+    # committed artifact before every mutation stage has finished.
     _write_report(output_path, report)
     return 0
 

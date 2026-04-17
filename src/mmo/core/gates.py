@@ -91,6 +91,8 @@ def apply_profile_overrides(
     if not isinstance(gates_overrides, dict) or not gates_overrides:
         return copy.deepcopy(gates_policy)
 
+    # Profiles overlay install-owned policy data. Deep-copy here so one report
+    # cannot mutate the shared base gates for later evaluations.
     return _deep_merge_profile_overrides(gates_policy, gates_overrides)
 
 
@@ -134,6 +136,8 @@ def _contexts_from_policy(gates: Dict[str, Any]) -> List[Context]:
     if isinstance(meta, dict):
         contexts = meta.get("contexts")
         if isinstance(contexts, list) and all(isinstance(c, str) for c in contexts):
+            # Context order is part of the public contract. Sorting later uses it
+            # to keep gate results and eligibility decisions deterministic.
             return list(contexts)
     return ["suggest", "auto_apply", "render"]
 
@@ -177,6 +181,8 @@ def _evaluate_requires_approval(
         return []
     reason_id = _coerce_str(rec.get("requires_approval_reason_id")) or gate.get("violation_reason_id")
     results: List[GateResult] = []
+    # Approval-gated work may still be suggested, but auto-apply and render must
+    # reject it until the caller supplies an explicit approval record.
     for context in contexts:
         if context == "suggest":
             continue
@@ -875,6 +881,8 @@ def evaluate_recommendation_gates(
             continue
 
         kind = gate.get("kind")
+        # Keep dispatch narrow and explicit. A new gate kind should do nothing
+        # until code handles it on purpose.
         if gate_id == "GATE.REQUIRES_APPROVAL" or kind == "authority":
             gate_results.extend(
                 _evaluate_requires_approval(rec, gate_id, gate, contexts, approvals)
@@ -907,6 +915,8 @@ def evaluate_recommendation_gates(
 
     gate_results = _sort_gate_results(gate_results, contexts)
 
+    # Eligibility comes from the sorted per-context gate results, not from one
+    # recommendation flag. A single rec can stay suggestible while render blocks.
     eligible_auto_apply = True
     eligible_render = True
     for result in gate_results:
@@ -938,6 +948,8 @@ def apply_gates_to_report(
         policy = apply_profile_overrides(policy, selected_profile_id, profiles_policy)
         report["profile_id"] = selected_profile_id
 
+    # Report callers do not always pass scene_payload directly. Fall back to the
+    # embedded session copy so spatial gates can still inspect lock state.
     resolved_scene_payload = scene_payload if isinstance(scene_payload, dict) else None
     if resolved_scene_payload is None:
         session_payload = report.get("session")
@@ -954,6 +966,8 @@ def apply_gates_to_report(
     for rec in recommendations:
         if not isinstance(rec, dict):
             continue
+        # Normalize first so later gate writes land on the canonical recommendation
+        # shape instead of preserving caller-specific omissions.
         normalize_recommendation_contract(rec)
         if is_spatial_change(rec):
             rec["spatial_change"] = True
@@ -972,6 +986,8 @@ def apply_gates_to_report(
                     permissive_profile=permissive_profile,
                 ),
             )
+            # Non-permissive profiles need either a satisfied spatial lock or an
+            # approval path before these recommendations can move forward.
             if not permissive_profile and not lock_satisfied:
                 rec["impact"] = "high"
                 rec["risk"] = "high"

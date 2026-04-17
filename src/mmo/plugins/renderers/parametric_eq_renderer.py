@@ -233,14 +233,15 @@ def _parse_filter_spec(
     if freq_hz is None:
         return None
 
-    # HPF: uses slope param, no gain_db
+    # HPF stays in a narrow cleanup band so this renderer removes rumble, not
+    # musical content. The Butterworth shape is fixed for the same reason.
     if action_id in _SLOPE_ACTIONS:
         if not (_HPF_MIN_FREQ_HZ <= freq_hz <= min(_HPF_MAX_FREQ_HZ, sample_rate_hz / 2.0 * 0.95)):
             return None
         # Q is fixed to Butterworth in _biquad_coeffs; pass 0.0 as placeholder
         return _biquad_coeffs(action_id, freq_hz, _HPF_BUTTERWORTH_Q, 0.0, sample_rate_hz)
 
-    # Gain-based actions (bell/notch/shelf): require gain_db and Q
+    # Gain-based actions are cut-only. Boosts belong in a different risk class.
     q = _get_param(params, "PARAM.EQ.Q")
     gain_db = _get_param(params, "PARAM.EQ.GAIN_DB")
 
@@ -325,6 +326,8 @@ def _render_eq(
                     out_handle.writeframes(bytes(raw))
 
             if pending:
+                # A final short block is still valid if it stays frame-aligned.
+                # Dropping it would change timing and mask the true render.
                 aligned = (len(pending) // channels) * channels
                 if aligned > 0:
                     block = pending[:aligned]
@@ -381,7 +384,8 @@ class ParametricEqRenderer(RendererPlugin):
         out_dir = Path(output_dir)
         stems_by_id = _index_stems(session)
 
-        # Filter to applicable recs (low or medium risk, no approval pending)
+        # Gate policy already filtered the recommendation set once. Recheck the
+        # basic risk contract here so this renderer never becomes the only guard.
         applicable: List[Dict[str, Any]] = []
         for rec in recommendations:
             if not isinstance(rec, dict):
@@ -453,6 +457,9 @@ class ParametricEqRenderer(RendererPlugin):
                         "gate_summary": "",
                     })
                 else:
+                    # Keep valid filters on the stem even if a sibling
+                    # recommendation was malformed. That preserves useful cuts
+                    # without inventing a whole-stem failure rule.
                     biquads.append(coeffs)
                     applied_recs.append(rec)
 
@@ -472,6 +479,8 @@ class ParametricEqRenderer(RendererPlugin):
                 continue
 
             rec_ids = sorted(_coerce_str(r.get("recommendation_id")) for r in applied_recs)
+            # The manifest needs one stable representative recommendation even
+            # when several valid EQ cuts contributed to the same output stem.
             representative = min(applied_recs, key=lambda r: _coerce_str(r.get("recommendation_id")))
             outputs.append({
                 "output_id": f"OUTPUT.EQ.{stem_id}.{output_path.name}",

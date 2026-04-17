@@ -104,6 +104,8 @@ def load_scene_locks(path: Path | None = None) -> dict[str, Any]:
 
     locks = _locks_map(payload)
     _validate_lock_order(locks, path=resolved_path)
+    # Preserve sorted lock ids in the returned payload so scene editors and
+    # receipts share one stable lock catalog.
     normalized_payload = dict(payload)
     normalized_payload["locks"] = {
         lock_id: dict(locks[lock_id]) for lock_id in sorted(locks.keys())

@@ -441,6 +441,8 @@ def _score_role(
                 for derived_reason in folder_token_reasons.get(token, ()):
                     _append_unique_reason(reasons, derived_reason)
 
+    # Folder tokens are weak evidence on purpose. They help break ties across
+    # sibling files but should not outweigh explicit filename matches.
     for token in rule.folder_match_tokens:
         if token in folder_token_set and token not in folder_hits:
             folder_hits.add(token)
@@ -529,6 +531,9 @@ def _detect_link_group_ids(files: list[dict[str, Any]]) -> dict[str, str]:
         ]
         has_left = any(token in _LEFT_SIDE_TOKENS for token in tokens)
         has_right = any(token in _RIGHT_SIDE_TOKENS for token in tokens)
+        # Only synthesize link groups when one side is explicit and the shared
+        # base tokens still line up. Weak evidence should leave stems unpaired
+        # rather than invent a stereo relationship.
         if has_left == has_right:
             continue
 
@@ -580,6 +585,8 @@ def classify_stems_with_evidence(
 
     files = stems_index.get("files")
     file_rows = [item for item in files if isinstance(item, dict)] if isinstance(files, list) else []
+    # Sort before classification so tie breaks, unknown fallbacks, and emitted
+    # explanations stay stable across filesystems.
     file_rows = sorted(
         file_rows,
         key=lambda item: (
@@ -609,6 +616,8 @@ def classify_stems_with_evidence(
         winner, winner_flags, ranked = _select_best_role(evidences)
 
         if winner is None:
+            # Unknown is an explicit assignment, not a missing row. Downstream
+            # planners need a stable fallback they can inspect and count.
             winner_role_id = unknown_rule.role_id if unknown_rule is not None else UNKNOWN_ROLE_ID
             winner_bus_group = (
                 unknown_rule.default_bus_group if unknown_rule is not None else None
@@ -623,6 +632,8 @@ def classify_stems_with_evidence(
             winner_reasons.extend(winner_flags)
             winner_reasons.append(f"score={winner_score}")
 
+        # Confidence is a review artifact derived from the public score, not
+        # hidden classifier state that only exists during this run.
         confidence = _rounded_confidence(winner_score)
         winner_reasons.append(f"confidence={confidence:.3f}")
 
@@ -639,6 +650,8 @@ def classify_stems_with_evidence(
             }
         )
 
+        # Emit explanation payloads in lockstep with the chosen assignment so
+        # review tools never see a winner that the receipt does not echo.
         explanations[explanation_key] = {
             "stem_id": stem_id,
             "source_file_id": source_file_id,

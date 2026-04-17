@@ -15,6 +15,8 @@ export function computeChannelRms(samples) {
   }
   let sumSquares = 0;
   for (let index = 0; index < samples.length; index += 1) {
+    // Treat non-finite decode artifacts as silence so preview math does not
+    // spread NaNs through the meter.
     const sample = _finite(samples[index], 0);
     sumSquares += sample * sample;
   }
@@ -24,6 +26,7 @@ export function computeChannelRms(samples) {
 export function rmsToDbfs(rmsValue, { epsilon = 1e-12 } = {}) {
   const safeRms = _finite(rmsValue, 0);
   const floor = Math.max(1e-15, _finite(epsilon, 1e-12));
+  // Keep a clear silence state instead of returning an arbitrary floor value.
   if (safeRms <= floor) {
     return Number.NEGATIVE_INFINITY;
   }
@@ -35,6 +38,8 @@ export function meterLevelFromDbfs(dbfs, { floorDb = -72 } = {}) {
   if (!Number.isFinite(dbfs)) {
     return 0;
   }
+  // The preview meter uses one fixed floor so left and right levels remain
+  // comparable across refreshes.
   return _clamp((dbfs - floor) / (0 - floor), 0, 1);
 }
 
@@ -56,6 +61,8 @@ export function buildWaveformProfile({
   const right = _clamp(_finite(rightLevel, 0), 0, 1);
   const t = _finite(timeSeconds, 0);
   const profile = [];
+  // This waveform is a deterministic UI profile, not decoded audio. Splitting
+  // the bar field by channel keeps stereo bias visible in the preview.
   for (let index = 0; index < count; index += 1) {
     const stereoLevel = index < Math.floor(count / 2) ? left : right;
     const pulse = 0.45 + (0.55 * Math.sin((t * 4.2) + (index * 0.63)));

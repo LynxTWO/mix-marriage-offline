@@ -105,6 +105,9 @@ function _safeStaticPath(urlPath) {
   const normalizedUrlPath = path.posix.normalize(urlPath);
 
   if (normalizedUrlPath.startsWith("/lib/")) {
+    // The dev shell only serves checked-in helper modules from gui/lib.
+    // Keep this containment check strict so browser requests cannot walk
+    // outside the repo-owned bridge code.
     const localPath = path.resolve(_SERVER_ROOT, `.${normalizedUrlPath}`);
     const relative = path.relative(_SERVER_ROOT, localPath);
     if (relative.startsWith("..") || path.isAbsolute(relative)) {
@@ -114,6 +117,8 @@ function _safeStaticPath(urlPath) {
   }
 
   const relativePath = normalizedUrlPath === "/" ? "/index.html" : normalizedUrlPath;
+  // Everything else must stay inside gui/web so static requests cannot
+  // turn into arbitrary local file reads.
   const localPath = path.resolve(_WEB_ROOT, `.${relativePath}`);
   const relative = path.relative(_WEB_ROOT, localPath);
   if (relative.startsWith("..") || path.isAbsolute(relative)) {
@@ -139,6 +144,8 @@ async function _loadJsonObject(pathValue) {
 
 function _looksLikeRenderRequestPath(pathValue) {
   const normalized = _pathToPosix(path.resolve(pathValue));
+  // This endpoint is read-only and intentionally narrow. It exists to inspect
+  // the canonical project render_request artifact, not arbitrary JSON files.
   return normalized.endsWith("/renders/render_request.json");
 }
 
@@ -152,6 +159,8 @@ function _renderArtifactInfo(pathValue) {
   if (!_ALLOWED_RENDER_ARTIFACT_NAMES.has(artifactName)) {
     return null;
   }
+  // Keep the artifact allowlist explicit so new bridge reads are a reviewable
+  // code change instead of an accidental filename convention.
   return {
     artifactName,
     normalizedPath: normalized,
@@ -280,6 +289,8 @@ function _parseJsonLines(text) {
     try {
       parsed = JSON.parse(line);
     } catch (error) {
+      // Event logs are evidence, not best-effort telemetry. Reject malformed
+      // JSONL so the caller sees the artifact drift instead of a partial read.
       throw new Error(
         `Invalid JSONL at line ${index + 1}: ${error instanceof Error ? error.message : String(error)}`,
       );
@@ -295,6 +306,8 @@ function _parseJsonLines(text) {
 async function _loadSnapshot(layoutPath, viewport) {
   const tempOut = _pluginSnapshotOutPath(path.basename(layoutPath));
   try {
+    // Snapshot generation shells out through the same CLI contract the real UI
+    // uses, then deletes the temp file on every path.
     await runMmoCli(
       [
         "ui-layout-snapshot",
@@ -325,6 +338,8 @@ async function _enrichPluginEntry(pluginEntry, pluginsDir, viewport) {
   }
 
   try {
+    // Pull the richer plugin view from the CLI instead of reconstructing it
+    // in Node. That keeps one authority for schema, hints, and layout paths.
     const pluginDetails = await runMmoCliJson(
       [
         "plugins",
@@ -353,6 +368,8 @@ async function _enrichPluginEntry(pluginEntry, pluginsDir, viewport) {
       ? pluginDetails.ui_layout.path
       : null;
     if (layoutPath) {
+      // The raw layout doc is optional UI context. Snapshot generation is the
+      // only step here with extra CLI side effects.
       try {
         layoutDocument = await _loadJsonObject(layoutPath);
       } catch {
@@ -430,6 +447,8 @@ async function _handleRenderRequestRead(response, body) {
     return;
   }
   const renderRequestPath = path.resolve(renderRequestPathRaw);
+  // Keep render-request reads pinned to the canonical project artifact. This
+  // route is for inspection, not for browsing arbitrary workspace JSON.
   if (!_looksLikeRenderRequestPath(renderRequestPath)) {
     _sendJson(response, 400, {
       error: "render_request_path must point to renders/render_request.json.",
@@ -467,6 +486,8 @@ async function _handleRenderArtifactRead(response, body) {
 
   const artifactPath = path.resolve(artifactPathRaw);
   const artifactInfo = _renderArtifactInfo(artifactPath);
+  // This endpoint only exposes a fixed set of render artifacts that the dev
+  // shell knows how to summarize and display safely.
   if (!artifactInfo) {
     _sendJson(response, 400, {
       error: "artifact_path must point to an allowlisted renders artifact file.",
@@ -563,6 +584,8 @@ async function _handleAudioStreamRequest(request, response, requestUrl) {
 
   let selected;
   try {
+    // render_execute.json is the pointer authority for playable inputs and
+    // outputs. The HTTP layer should not guess paths from query params alone.
     selected = _selectedAudioPointer(executePayload, jobId, streamKind, slot);
   } catch (error) {
     _sendJson(response, 404, { error: error instanceof Error ? error.message : String(error) });
@@ -572,6 +595,8 @@ async function _handleAudioStreamRequest(request, response, requestUrl) {
   const resolvedAudioPath = await _resolveRealPathOrAbsolute(selected.audioPath);
   const insideProjectDir = _isPathInsideRoot(resolvedAudioPath, resolvedProjectDir);
   const insideProjectOutputRoot = _isPathInsideRoot(resolvedAudioPath, resolvedProjectOutputRoot);
+  // External output paths stay opt-in because this endpoint streams raw local
+  // media. The default contract only trusts files inside the project roots.
   if (!_ALLOW_EXTERNAL_OUTPUT_PATHS && !insideProjectDir && !insideProjectOutputRoot) {
     _sendJson(response, 403, {
       error: (
@@ -619,6 +644,8 @@ async function _handleAudioStreamRequest(request, response, requestUrl) {
   }
 
   if (range) {
+    // Support ranged reads so long local files do not need to load in one shot
+    // before the browser can start playback or scrubbing.
     const contentLength = range.end - range.start + 1;
     response.statusCode = 206;
     response.setHeader("Content-Length", String(contentLength));
@@ -684,6 +711,8 @@ async function _handleApiRequest(request, response, pathname) {
       : {};
 
     try {
+      // This bridge trusts the local browser and forwards method calls as-is
+      // after basic shape checks. It does not add another auth layer.
       const rpcResponse = await _rpcClient.sendRequest(method.trim(), params);
       _sendJson(response, 200, { response: rpcResponse });
     } catch (error) {

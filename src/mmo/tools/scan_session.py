@@ -116,6 +116,9 @@ def _resolved_stem_path_for_scan(
     path = resolved_stem_path(stem)
     if path is not None:
         return path
+    # Scan must recover paths with the same portable locator rules used by later
+    # session and render stages. If that fallback drifts, scan can meter a
+    # different file than the rest of the pipeline.
     return resolved_stem_path(resolve_stem_locator(stem, stems_dir=stems_dir))
 
 
@@ -298,6 +301,8 @@ def _worker_basic_meters(
     format_id = detect_format_from_path(stem_path)
     measurements: List[Dict[str, Any]] = []
 
+    # Use the native WAV reader here. It matches the direct decode path used
+    # elsewhere and leaves FFmpeg as the compatibility path for other formats.
     if format_id == "wav":
         if "sample_rate_hz" not in stem or "bits_per_sample" not in stem:
             return result
@@ -333,6 +338,9 @@ def _worker_basic_meters(
     elif format_id in {"flac", "wavpack", "aiff", "ape"}:
         ffmpeg_cmd = resolve_ffmpeg_cmd()
         if ffmpeg_cmd is None:
+            # Missing ffmpeg is an optional-dependency problem. Return a flag so
+            # the session-level report can keep scanning the rest of the stems
+            # and emit one shared issue instead of failing early here.
             result["missing_ffmpeg"] = True
             return result
         try:
@@ -440,6 +448,9 @@ def _worker_truth_meters(
         channel_layout=stem.get("channel_layout"),
         method_id=method_id,
     )
+    # Pair correlations are only meaningful when channel order evidence is
+    # strong enough to name the pair. Weak layout hints should emit a skipped
+    # receipt, not guessed stereo evidence.
     pairs, pair_meta, skip_reason = _plan_correlation_pairs(order_csv, mode_str, channels)
     pair_correlations: Dict[str, float] | None = None
     pair_source: str | None = None
@@ -474,6 +485,9 @@ def _worker_truth_meters(
     elif format_id in {"flac", "wavpack", "aiff", "ape"}:
         ffmpeg_cmd = resolve_ffmpeg_cmd()
         if ffmpeg_cmd is None:
+            # Truth meters can still leave a useful session receipt behind even
+            # when ffmpeg is absent. Report that gap later instead of hiding
+            # all other scan evidence behind one missing tool.
             result["missing_ffmpeg"] = True
             return result
         try:
@@ -557,6 +571,8 @@ def _worker_truth_meters(
             {"evidence_id": "EVID.IMAGE.CORRELATION_PAIRS_LOG", "value": pairs_log, "unit_id": "UNIT.NONE"}
         )
     elif skip_reason and channels >= 2:
+        # Record the skip when we know why correlation was withheld. Silence
+        # here would look like a clean pass.
         layout = stem.get("channel_layout")
         if order_csv != "unknown" or channel_mask is not None or layout is not None:
             payload = {
@@ -821,6 +837,9 @@ def _build_mix_complexity(
     for item in loaded_stems:
         sample_rate_hz = int(item["sample_rate_hz"])
         sample_rate_counts[sample_rate_hz] = sample_rate_counts.get(sample_rate_hz, 0) + 1
+    # Scan does not resample here. Pick the dominant rate so the masking and
+    # density math stays deterministic, then surface the skipped stems in the
+    # payload for later review.
     selected_sample_rate = sorted(
         sample_rate_counts.items(), key=lambda item: (-item[1], item[0])
     )[0][0]
@@ -969,6 +988,8 @@ def _add_lfe_audit_issues(
     missing_ffmpeg = False
     stems = session.get("stems", [])
 
+    # Audit stems independently so one unreadable file does not hide LFE
+    # evidence from the rest of the session.
     for stem in stems:
         if not isinstance(stem, dict):
             continue
@@ -1000,6 +1021,8 @@ def _add_lfe_audit_issues(
 
         all_samples = _collect_stem_samples(stem, stems_dir, ffmpeg_cmd)
         if all_samples is None:
+            # Validation already owns the broader session error surface. The LFE
+            # audit only adds extra evidence when a stem can be decoded here.
             continue
 
         # Build mains samples = all non-LFE channels mixed together
@@ -1393,6 +1416,8 @@ def build_report(
     include_peak: bool = False,
     meters: Optional[str] = None,
 ) -> Dict[str, Any]:
+    # Build the normalized session first so every later phase sees the same
+    # resolved stem list and portable IDs.
     session = build_session_from_stems_dir(stems_dir)
     stems = session.get("stems", [])
     if not stems:
@@ -1439,6 +1464,8 @@ def build_report(
         missing_ffmpeg = _add_basic_meter_measurements(session, stems_dir)
         t_elapsed = (time.perf_counter() - t_start) * 1000
         scan_timings["basic_meters_ms"] = t_elapsed
+    # Validate once the session shape is stable. Later phases add evidence, but
+    # they should not change which stems exist or how they are identified.
     issues = validate_session(session, strict=strict)
 
     # Role naming convention validation (lightweight keyword check)
@@ -1530,6 +1557,9 @@ def build_report(
         "recommendations": [],
     }
     if mix_complexity is not None:
+        # Vibe and preset hints depend on the final mix-complexity payload. Run
+        # them after meters and audits so downstream suggestions see the last
+        # intake evidence, not a partial report.
         report["mix_complexity"] = mix_complexity
         report["vibe_signals"] = derive_vibe_signals(report)
         report["preset_recommendations"] = derive_preset_recommendations(
@@ -1608,14 +1638,18 @@ def main() -> int:
         )
 
         if args.schema:
+            # Validate before any write so callers do not persist a receipt that
+            # the requested contract already rejects.
             _validate_schema(Path(args.schema), report)
 
-        # --dry-run: print summary only, do not write file
+        # Dry-run still builds and validates the artifact. It only stops short
+        # of persisting JSON to disk.
         if args.dry_run:
             print(_render_scan_summary(report))
             return 0
 
-        # --summary: print human-readable summary to stdout
+        # Leave the human summary outside the write path so automation can
+        # request JSON output without mixed stdout.
         if args.summary:
             print(_render_scan_summary(report))
 

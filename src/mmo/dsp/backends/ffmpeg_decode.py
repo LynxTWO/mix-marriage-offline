@@ -13,6 +13,8 @@ def _path_arg(path: Path) -> str:
 
 def build_ffmpeg_decode_command(path: Path, ffmpeg_cmd: Sequence[str]) -> list[str]:
     """Build deterministic ffmpeg decode command for float64 PCM streaming."""
+    # Decode to float64 PCM on every path so later DSP stages do not depend on
+    # codec-specific sample width or FFmpeg's default output format.
     return list(ffmpeg_cmd) + [
         "-v",
         "error",
@@ -53,6 +55,8 @@ def iter_ffmpeg_float64_samples(
             if not chunk:
                 break
             buffer += chunk
+            # Yield only whole float64 values. Frame alignment is checked by the
+            # caller once channel count is known.
             aligned = len(buffer) - (len(buffer) % 8)
             if aligned <= 0:
                 continue
@@ -67,6 +71,8 @@ def iter_ffmpeg_float64_samples(
     finally:
         proc.stdout.close()
 
+    # Drain stderr after stdout closes so the process can finish and report one
+    # final failure reason instead of truncating decode output mid-stream.
     stderr_payload = proc.stderr.read()
     proc.stderr.close()
     returncode = proc.wait()

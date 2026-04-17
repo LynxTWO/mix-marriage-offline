@@ -232,7 +232,9 @@ def validate_against_scene(
         if isinstance(raw_conf, (int, float)):
             overall_conf = float(raw_conf)
 
-    # Also check recommendations
+    # Scene metadata owns this check when present. Recommendation confidence is
+    # only a fallback for older or partial artifacts that do not carry a scene
+    # summary yet.
     recommendations = scene.get("recommendations")
     if overall_conf is None and isinstance(recommendations, list) and recommendations:
         scores: list[float] = []
@@ -266,6 +268,8 @@ def validate_against_scene(
                 ),
             })
 
+    # Correlation is a scene-wide polarity risk, not a recommendation-quality
+    # score. Leave it separate so strong rec confidence cannot hide phase risk.
     # --- Correlation / polarity check ---
     corr_warn = float(gate_overrides.get("correlation_warn_lte", -0.2))
     corr_error = float(gate_overrides.get("correlation_error_lte", -0.6))
@@ -296,6 +300,8 @@ def validate_against_scene(
                 ),
             })
 
+    # Sort deterministically so review output and fixture expectations stay
+    # comparable when more than one compatibility gate fires.
     # Stable sort: error before warn, then by code
     _severity_order = {"error": 0, "warn": 1, "info": 2}
     issues.sort(key=lambda iss: (_severity_order.get(iss.get("severity", "info"), 2), iss.get("code", "")))

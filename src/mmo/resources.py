@@ -95,12 +95,14 @@ def data_root() -> Path:
             "resource layout: schemas/, ontology/, and ontology/presets/index.json"
         )
 
-    # 2. Packaged data.
+    # Normal installs should trust bundled data first.
+    # Falling through to checkout files here would hide packaging drift.
     pkg = _packaged_data_path()
     if pkg is not None:
         return pkg
 
-    # 3. Repo-checkout fallback.
+    # Repo fallback keeps local checkout workflows usable without MMO_DATA_ROOT.
+    # It stays last so installed builds fail loudly when bundled data is missing.
     repo = _repo_checkout_root()
     if repo is not None:
         return repo
@@ -154,6 +156,8 @@ def default_cache_dir() -> Path:
 
     repo = _repo_checkout_root()
     if repo is not None:
+        # Checkout-local cache keeps test and dev artifacts inside the repo tree.
+        # Installed runs should prefer user cache roots over writing near code.
         return (repo / ".mmo_cache").resolve()
 
     return _os_cache_dir()
@@ -188,6 +192,7 @@ def _ensure_real_directory(path: Path) -> Path:
         raise RuntimeError(_TEMP_DIR_ERROR_MESSAGE)
     probe = resolved / f".mmo_temp_probe_{os.getpid()}"
     try:
+        # Fail here before long-running render stages write partial outputs.
         probe.write_text("ok", encoding="utf-8")
         probe.unlink()
     except OSError as exc:
@@ -218,6 +223,8 @@ def _temp_dir_candidates() -> list[tuple[str, Path, Path]]:
         env_path = Path(env).expanduser()
         candidates.append(("env:MMO_TEMP_DIR", env_path, env_path))
 
+    # Prefer per-process OS temp before repo-local temp so parallel runs do not
+    # fight over one shared checkout directory unless every earlier option fails.
     os_temp_root = _os_temp_root()
     candidates.append(("os_temp", os_temp_root / str(os.getpid()), os_temp_root))
 

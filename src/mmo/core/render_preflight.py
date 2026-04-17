@@ -85,6 +85,8 @@ def _run_ffprobe(ffprobe_cmd: tuple[str, ...], *, input_path: Path) -> dict[str,
         "-show_format",
         os.fspath(input_path),
     ]
+    # Preflight records one artifact across every input. Probe failures collapse
+    # to None so the caller can keep scanning and emit the full issue set.
     try:
         completed = subprocess.run(
             command,
@@ -142,6 +144,8 @@ def _run_ffprobe(ffprobe_cmd: tuple[str, ...], *, input_path: Path) -> dict[str,
 
 def _resolve_input_path(*, plan_path: Path, input_path: str) -> Path:
     candidate = Path(input_path)
+    # Job inputs may be stored as relative refs. Anchor them to the saved plan
+    # so preflight checks the same files a later render run would resolve.
     if not candidate.is_absolute():
         candidate = plan_path.parent / candidate
     try:
@@ -206,6 +210,8 @@ def _loudness_profile_receipt(plan: dict[str, Any]) -> dict[str, Any]:
     try:
         return resolve_loudness_profile_receipt(requested_profile_id)
     except ValueError as exc:
+        # Keep the receipt shape stable even when a saved plan echoes an unknown
+        # profile id from an older install or edited request.
         fallback = resolve_loudness_profile_receipt(DEFAULT_LOUDNESS_PROFILE_ID)
         warnings = list(fallback.get("warnings") or [])
         warnings.insert(
@@ -227,6 +233,8 @@ def build_render_preflight_payload(
     ffprobe_cmd = _ffprobe_command_from_env()
     jobs = plan.get("jobs")
     job_rows: list[dict[str, Any]] = [row for row in jobs if isinstance(row, dict)] if isinstance(jobs, list) else []
+    # Sort jobs and inputs so the saved artifact does not depend on planner or
+    # filesystem iteration order.
     indexed_jobs = list(enumerate(job_rows))
     indexed_jobs.sort(key=lambda item: (_normalize_job_id(item[1].get("job_id")), item[0]))
 
@@ -265,6 +273,8 @@ def build_render_preflight_payload(
             is_file = resolved_input_path.is_file()
 
             if not exists:
+                # Missing or wrong-shaped inputs are hard stop evidence. Later
+                # render stages must not try to recover past these rows.
                 has_error = True
                 issues.append(
                     _issue(
@@ -291,6 +301,8 @@ def build_render_preflight_payload(
 
             ffprobe_payload: dict[str, Any]
             if ffprobe_cmd is None:
+                # Missing ffprobe downgrades metadata collection only. Existence
+                # and file-shape checks still make preflight useful.
                 ffprobe_payload = {"status": "skipped", "reason": "ffprobe unavailable"}
             elif not exists:
                 ffprobe_payload = {
@@ -352,6 +364,8 @@ def preflight_has_error_issues(payload: dict[str, Any]) -> bool:
     issues = payload.get("issues")
     if not isinstance(issues, list):
         return False
+    # Only error severity blocks render continuation. Warnings stay attached to
+    # the artifact without turning preflight into a hard stop.
     for issue in issues:
         if not isinstance(issue, dict):
             continue

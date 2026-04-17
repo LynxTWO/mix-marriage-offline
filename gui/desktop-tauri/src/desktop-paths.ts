@@ -83,6 +83,8 @@ function sanitizeList(value: unknown): string[] {
 }
 
 function sanitizeRecentPaths(value: unknown): RecentPathsState {
+  // Recent-path state is user convenience, not trusted config. Sanitize every
+  // load so edited files or stale browser storage cannot poison desktop state.
   const source = value !== null && typeof value === "object" && !Array.isArray(value)
     ? value as Partial<Record<RecentPathGroup | "version", unknown>>
     : {};
@@ -107,6 +109,8 @@ async function writeBrowserRecentPaths(value: RecentPathsState): Promise<void> {
 }
 
 export async function loadRecentPaths(): Promise<RecentPathsState> {
+  // Browser storage is only a fallback for tests and non-Tauri previews. The
+  // packaged app prefers app-local data so recents survive WebView resets.
   if (!isTauriRuntime()) {
     if (typeof window === "undefined") {
       return emptyRecentPaths();
@@ -133,6 +137,8 @@ export async function loadRecentPaths(): Promise<RecentPathsState> {
 
 export async function saveRecentPaths(value: RecentPathsState): Promise<void> {
   const sanitized = sanitizeRecentPaths(value);
+  // Write the same sanitized shape to every backend so desktop and browser
+  // fallback paths do not drift into different recent-path rules.
   if (!isTauriRuntime()) {
     await writeBrowserRecentPaths(sanitized);
     return;
@@ -163,6 +169,8 @@ export function recordRecentPath(
     return current;
   }
 
+  // Keep recents short and newest-first. The UI treats this as a launch aid,
+  // not an audit log that keeps duplicate or long-tail entries forever.
   const next = current[group].filter((entry) => entry !== sanitized);
   return {
     ...current,
@@ -174,6 +182,8 @@ export async function browseDirectory(options: {
   defaultPath?: string;
   title: string;
 }): Promise<string | null> {
+  // Host file pickers are a desktop-only privilege. Returning null here keeps
+  // browser previews from pretending they can browse the local filesystem.
   if (!isTauriRuntime()) {
     return null;
   }
@@ -188,6 +198,8 @@ export async function browseDirectory(options: {
 }
 
 export async function browseFile(options: BrowseFileOptions): Promise<string | null> {
+  // Mirror the desktop-only rule for file picks so tests and Vite preview do
+  // not silently diverge from the packaged app's trust boundary.
   if (!isTauriRuntime()) {
     return null;
   }

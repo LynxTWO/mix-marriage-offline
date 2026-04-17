@@ -64,8 +64,9 @@ def _classify_rec(rec: Dict[str, Any]) -> str:
     if risk in _LOW_RISK_VALUES and requires_approval is False:
         return _REASON_AUTO_APPROVED
     if risk in _MEDIUM_RISK_VALUES and requires_approval is False:
-        # Medium risk with no explicit approval needed: treat as conditional
-        # auto-approved; the gate policy already admitted it as eligible.
+        # Earlier gate policy already decided this medium-risk item can proceed
+        # without approval. This audit renderer records that outcome; it does
+        # not make a second policy decision here.
         return _REASON_AUTO_APPROVED
     # Anything remaining (approval status unclear or risk unrecognised)
     return _REASON_REQUIRES_APPROVAL
@@ -87,6 +88,8 @@ class SafeRenderer(RendererPlugin):
         recommendations: List[Recommendation],
         output_dir: Any = None,
     ) -> RenderManifest:
+        # This renderer writes no audio. The skipped rows are the approval
+        # audit receipt that downstream tools surface alongside DSP manifests.
         skipped: List[Dict[str, Any]] = []
 
         for rec in recommendations:
@@ -111,6 +114,8 @@ class SafeRenderer(RendererPlugin):
                 "gate_summary": gate_summary,
             })
 
+        # Stable ordering keeps the approval receipt diffable across repeated
+        # renders with the same recommendation set.
         skipped.sort(key=lambda s: (
             s.get("reason", ""),
             s.get("recommendation_id", ""),

@@ -65,6 +65,8 @@ def _normalize_workspace_relative_path(value: Any) -> str | None:
 
 def _session_stems_dir(session: Mapping[str, Any]) -> Path | None:
     stems_dir = _normalize_path_text(session.get("stems_dir"))
+    # Only absolute anchors are trusted here. Relative stems roots would make
+    # the same session resolve to different files depending on caller cwd.
     if not stems_dir or not _looks_absolute_path(stems_dir):
         return None
     return Path(stems_dir)
@@ -78,6 +80,8 @@ def _session_workspace_dir(
     if workspace_dir is not None:
         return workspace_dir
     session_workspace_dir = _normalize_path_text(session.get("workspace_dir"))
+    # Workspace-relative source refs are only safe when the workspace anchor is
+    # explicit and absolute.
     if not session_workspace_dir or not _looks_absolute_path(session_workspace_dir):
         return None
     return Path(session_workspace_dir)
@@ -101,6 +105,8 @@ def _finalize_success(
     stem_row["resolved_path"] = resolved.as_posix()
     stem_row["resolve_error_code"] = None
     stem_row["resolve_error_detail"] = None
+    # Preserve authored locator fields when they already exist. Only backfill
+    # the portable hints needed for later project moves and exports.
     if not stem_row.get("workspace_relative_path"):
         stem_row["workspace_relative_path"] = _relative_to_workspace(
             resolved,
@@ -149,6 +155,8 @@ def resolve_stem_locator(
 
     attempted_candidates: list[str] = []
 
+    # Resolution order matters: prefer an explicit absolute file, then a path
+    # under session.stems_dir, then a workspace-relative source reference.
     if file_path and _looks_absolute_path(file_path):
         absolute_candidate = Path(file_path)
         attempted_candidates.append(file_path)
@@ -172,6 +180,8 @@ def resolve_stem_locator(
                     workspace_dir=workspace_dir,
                 )
         elif not source_ref:
+            # A relative file_path without stems_dir is ambiguous. Do not guess
+            # a base directory from cwd or later callers.
             return _finalize_error(
                 stem_row,
                 error_code=RESOLVE_ERROR_MISSING_STEMS_DIR,
@@ -197,6 +207,8 @@ def resolve_stem_locator(
                     workspace_dir=workspace_dir,
                 )
         else:
+            # Workspace-relative refs are only meaningful with an explicit
+            # workspace anchor, not whichever directory a caller happens to use.
             return _finalize_error(
                 stem_row,
                 error_code=RESOLVE_ERROR_MISSING_WORKSPACE_DIR,
@@ -207,6 +219,8 @@ def resolve_stem_locator(
             )
 
     if not file_path and not workspace_source_ref:
+        # Missing all locator fields is a contract error, not a "not found"
+        # lookup miss.
         return _finalize_error(
             stem_row,
             error_code=RESOLVE_ERROR_MISSING_PATH_FIELDS,
@@ -217,6 +231,8 @@ def resolve_stem_locator(
         )
 
     attempted_label = ", ".join(dict.fromkeys(attempted_candidates))
+    # Report every deterministic candidate that was tried so repair work can
+    # fix the right anchor instead of re-running blind.
     detail = (
         f"None of the deterministic source candidates existed: {attempted_label}"
         if attempted_label
@@ -240,6 +256,8 @@ def resolve_session_stems(
     if not isinstance(stems_payload, list):
         return []
 
+    # All callers share one resolution pass so scene building, analysis, and
+    # project restore cannot drift into different path precedence rules.
     resolved_stems = [
         resolve_stem_locator(
             stem,
@@ -302,6 +320,8 @@ def portable_stem_locator_metadata(
         or metadata.get("source_ref")
         or metadata.get("file_path")
     )
+    # Portable exports rewrite every locator field against the same anchor so
+    # downstream tools can move sessions without losing source intent.
     for field_name in (
         "file_path",
         "workspace_relative_path",
@@ -329,6 +349,8 @@ def stem_resolution_entries(
         ]
     else:
         entries = [stem_locator_metadata(stem) for stem in stems]
+    # Sort exported locator rows so diagnostics and receipts stay diff-stable
+    # across machines and repeated runs.
     entries.sort(
         key=lambda row: (
             _coerce_str(row.get("stem_id")),

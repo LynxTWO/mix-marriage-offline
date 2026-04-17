@@ -18,6 +18,8 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
+# Asset protocol is how the packaged shell serves local media and other
+# filesystem-backed artifacts into the WebView without inventing a second bridge.
 tauri = { version = "2", features = ["protocol-asset"] }
 tauri-plugin-dialog = "2"
 tauri-plugin-fs = "2"
@@ -33,5 +35,7 @@ serde_json = "1"
 # Rust 1.94 warning-clean backports without pinning older Rust or suppressing
 # warnings globally. Exit path: delete this override once published
 # Tauri/Wry/WebKitGTK crates resolve to a published glib newer than 0.18.5.
+# Keeping the patch explicit here prevents release builds from silently flipping
+# back to an older published glib when the lockfile or resolver changes.
 # See vendor/glib-0.18.5/MMO_VENDOR_NOTES.md for the exact base + backports.
 glib = { path = "vendor/glib-0.18.5" }

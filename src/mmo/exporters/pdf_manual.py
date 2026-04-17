@@ -148,6 +148,8 @@ def build_manual_pdf(
     if not manifest_path.is_file():
         raise FileNotFoundError(f"Manual manifest not found: {manifest_path}")
 
+    # manual.yaml stays the source of truth for chapter order and appendix inputs.
+    # A second config path here would let the builder drift from the validator.
     manifest = _yaml.safe_load(manifest_path.read_text(encoding="utf-8"))
     if not isinstance(manifest, dict):
         raise ValueError(
@@ -161,12 +163,16 @@ def build_manual_pdf(
 
     glossary_terms: list[dict[str, Any]] = []
     glossary_path = chapters_dir / glossary_file
+    # Glossary data enriches the manual, but chapter rendering still needs to work
+    # when glossary.yaml is absent or empty.
     if glossary_path.is_file():
         gdata = _yaml.safe_load(glossary_path.read_text(encoding="utf-8"))
         if isinstance(gdata, dict):
             glossary_terms = gdata.get("terms", [])
 
     git_sha = _get_git_sha()
+    # The title page prefers the manifest or CLI version and only adds git
+    # metadata when a checkout is available.
     version_label = f"v{version}" if not version.startswith("v") else version
     if git_sha:
         version_label = f"{version_label} ({git_sha})"
@@ -188,6 +194,8 @@ def build_manual_pdf(
 
 def _get_git_sha() -> str:
     """Return short git SHA, or empty string if unavailable."""
+    # Git metadata is best-effort. Packaged installs and source archives still
+    # need to build the manual without a live repo checkout.
     try:
         result = subprocess.run(
             ["git", "rev-parse", "--short", "HEAD"],
@@ -244,6 +252,8 @@ class _ManualDocTemplate(_BaseDocTemplate):  # type: ignore[misc]
         toc_level = getattr(flowable, "_toc_level", None)
         if toc_level is None:
             return
+        # Only tagged headings become TOC entries. Using visible text alone would
+        # let normal paragraphs leak into the outline.
         text = flowable.getPlainText()
         self.notify("TOCEntry", (toc_level, text, self.page))
 
@@ -265,6 +275,8 @@ def _make_canvas_factory(project_name: str, version_label: str) -> type:
             self._startPage()
 
         def save(self) -> None:
+            # ReportLab only knows the final page count after layout completes, so
+            # save() replays each buffered page state before drawing footer chrome.
             total = len(self._saved_page_states)
             for state in self._saved_page_states:
                 self.__dict__.update(state)
@@ -544,6 +556,9 @@ def _parse_markdown(
     para_buf: list[str] = []
     bullet_buf: list[str] = []
 
+    # Keep the parser intentionally small. The manual tests and screenshots rely
+    # on a predictable layout, not on full Markdown compatibility.
+
     def _flush_para() -> None:
         if para_buf:
             content = " ".join(para_buf).strip()
@@ -591,6 +606,8 @@ def _parse_markdown(
             alt_text = img_match.group(1)
             img_ref = img_match.group(2).strip()
             img_embedded = False
+            # Only local chapter-relative assets are embedded. Missing files and
+            # decode failures stay visible through a placeholder paragraph.
             if (
                 _REPORTLAB
                 and chapters_dir is not None
@@ -630,6 +647,8 @@ def _parse_markdown(
             _flush_bullets()
             level = len(line) - len(line.lstrip("#"))
             heading_text = line.lstrip("#").strip()
+            # Only the first three ATX levels are part of the manual outline.
+            # Anything deeper still renders, but it should not change TOC shape.
             if level == 1:
                 flowables.extend(_divider(styles))
                 p = _Paragraph(_esc(heading_text), styles["h1"])
@@ -660,6 +679,8 @@ def _parse_markdown(
 
         # Continuation of a bullet (indented)
         if bullet_buf and line.startswith("  "):
+            # Keep wrapped bullet text attached to the current item so long steps
+            # do not silently become body paragraphs.
             bullet_buf[-1] = bullet_buf[-1] + " " + line.strip()
             i += 1
             continue
@@ -701,6 +722,8 @@ def _data_table(
         textColor=_colors.white,
     )
 
+    # Convert every cell to a Paragraph before Table() sees it so wrapping and
+    # repeated header rows stay consistent across long appendix values.
     header_row = [_Paragraph(h, hdr_style) for h in headers]
     body_rows = [
         [_Paragraph(_esc(str(cell)), cell_style) for cell in row]
@@ -891,6 +914,8 @@ class _ManualBuilder:
 
         usable_width = page_w - margin_l - margin_r - 2 * frame_padding
         usable_height = page_h - margin_t - margin_b - 2 * frame_padding
+        # Build the story once from the manifest order, then let multiBuild()
+        # resolve the TOC against that fixed sequence.
         story = self._build_story(toc, usable_width=usable_width, usable_height=usable_height)
         doc.multiBuild(story, canvasmaker=canvas_factory)
 
@@ -898,6 +923,8 @@ class _ManualBuilder:
         s = self._styles
         story: list[Any] = []
 
+        # Keep the document order fixed. Review copies, validator output, and
+        # screenshots depend on cover, TOC, chapters, glossary, then appendices.
         # ---- Cover page ----
         story.append(_make_title_page_flowable(self._version_label))
         story.append(_PageBreak())
@@ -919,6 +946,8 @@ class _ManualBuilder:
                     raise FileNotFoundError(
                         f"Chapter file missing (strict mode): {chapter_path}"
                     )
+                # Non-strict builds keep an explicit marker so review copies show
+                # the gap instead of silently renumbering the manual.
                 story.append(
                     _Paragraph(
                         f"[MISSING CHAPTER: {_esc(chapter_file)}]",
@@ -1047,6 +1076,8 @@ class _ManualBuilder:
                 text=True,
                 check=False,
             )
+            # Keep the captured help text even when the command exits non-zero.
+            # The appendix should show the failure instead of hiding it.
             help_text = result.stdout or result.stderr or "(no output)"
         except Exception as exc:  # noqa: BLE001
             help_text = f"(error running mmo --help: {exc})"
@@ -1086,6 +1117,8 @@ class _ManualBuilder:
                 )
                 rows.append([tid, layout_id, label, aliases])
         except Exception as exc:  # noqa: BLE001
+            # Render a visible error row so the appendix never looks complete
+            # when the registry load failed.
             rows = [[f"(error: {exc})", "", "", ""]]
 
         page_w, _ = _A4
@@ -1129,6 +1162,8 @@ class _ManualBuilder:
                     str(lock.get("severity", "")),
                 ])
         except Exception as exc:  # noqa: BLE001
+            # A visible error row keeps appendix shape intact and leaves the
+            # missing registry data obvious to the reader.
             rows = [[f"(error: {exc})", "", "", ""]]
 
         page_w, _ = _A4
@@ -1177,6 +1212,8 @@ class _ManualBuilder:
                 for ls in LayoutStandard
             ]
         except Exception as exc:  # noqa: BLE001
+            # Silent omission here would hide a layout-contract problem inside a
+            # document that readers expect to be authoritative.
             rows = [[f"(error: {exc})", ""]]
 
         page_w, _ = _A4
@@ -1220,6 +1257,8 @@ class _ManualBuilder:
                     str(p.get("description", "")),
                 ])
         except Exception as exc:  # noqa: BLE001
+            # Preset load failures still need a row in the appendix so the PDF
+            # does not look healthy when the source data was missing.
             rows = [[f"(error: {exc})", "", ""]]
 
         page_w, _ = _A4

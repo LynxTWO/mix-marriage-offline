@@ -17,6 +17,8 @@ export function mixChannelsToMono(channels, maxFrames = 262_144) {
     (minimum, channel) => Math.min(minimum, channel.length),
     channelData[0].length,
   );
+  // Preview overlays only use the shared decoded prefix. Truncating to the
+  // shortest channel avoids reading past partial decode results.
   const limitedFrames = Math.max(0, Math.min(frameCount, maxFrames));
   const mono = new Float32Array(limitedFrames);
   for (let frameIndex = 0; frameIndex < limitedFrames; frameIndex += 1) {
@@ -33,6 +35,8 @@ export function buildWaveformEnvelope(samples, { pointCount = 96 } = {}) {
   if (!_isArrayLikeFloat32(samples) || samples.length === 0) {
     return [];
   }
+  // The overlay keeps one peak per window. That favors readable evidence over
+  // raw sample detail and keeps the browser payload small.
   const count = Math.max(2, Math.min(256, Number.parseInt(String(pointCount), 10) || 96));
   const envelope = new Array(count).fill(0);
   const stride = samples.length / count;
@@ -91,6 +95,8 @@ export function buildSpectrumProfile(
   if (!_isArrayLikeFloat32(samples) || samples.length === 0 || !Number.isFinite(sampleRate) || sampleRate <= 0) {
     return { centersHz: [], levelsDb: [] };
   }
+  // Overlay spectra use a bounded slice, not full-file analysis. The browser
+  // only needs a cheap shape preview here.
   const availableFrames = Math.max(128, Math.min(samples.length, sampleFrames));
   const mono = samples.subarray(0, availableFrames);
   const windowed = new Float32Array(mono.length);
@@ -105,6 +111,8 @@ export function buildSpectrumProfile(
     Math.max(12, Math.min(96, bandCount)),
   );
   const magnitudes = centersHz.map((centerHz) => _goertzelMagnitude(windowed, sampleRate, centerHz));
+  // Normalize against the loudest sampled band so the overlay compares shape
+  // within one preview instead of mixing in export level.
   const maxMagnitude = Math.max(...magnitudes, 1e-9);
   const levelsDb = magnitudes.map((magnitude) => {
     const normalized = magnitude / maxMagnitude;
@@ -126,6 +134,8 @@ export function normalizeSpectralProfile(spectral) {
       : [];
   const centersHz = [];
   const levelsDb = [];
+  // Drop malformed pairs instead of filling gaps. Less evidence is safer than
+  // invented overlay data.
   for (let index = 0; index < Math.min(rawCenters.length, rawLevels.length); index += 1) {
     const centerHz = rawCenters[index];
     const levelDb = rawLevels[index];

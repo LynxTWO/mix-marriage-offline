@@ -94,6 +94,8 @@ def _select_breakpoint(
 
     if not matches:
         return None
+    # Prefer the most specific matching breakpoint so larger-range fallbacks do
+    # not shadow narrow layouts for the same viewport.
     matches.sort(key=lambda item: (item[0], item[1], item[2], item[3]))
     return matches[0][4]
 
@@ -166,6 +168,8 @@ def _sorted_section_widgets(section: dict[str, Any]) -> list[dict[str, Any]]:
     raw_widgets = section.get("widgets")
     widgets = [row for row in raw_widgets if isinstance(row, dict)] if isinstance(raw_widgets, list) else []
     indexed_widgets = list(enumerate(widgets))
+    # Sort by widget_id, then original index, so snapshots stay stable without
+    # erasing author intent when duplicate ids slip through.
     indexed_widgets.sort(
         key=lambda item: (
             _coerce_str(item[1].get("widget_id")).strip(),
@@ -214,6 +218,8 @@ def _auto_place(
         max_row = max((row for row, _ in occupied_cells), default=0)
         return 1, max_row + 1
 
+    # Auto-placement scans rows top-to-bottom, left-to-right. That keeps widget
+    # placement deterministic when authors omit explicit grid coordinates.
     max_col_start = section_columns - col_span + 1
     row_start = 1
     while True:
@@ -309,6 +315,8 @@ def build_ui_layout_snapshot(
         raise ValueError("Viewport width and height must be >= 1.")
 
     selected_breakpoint = _select_breakpoint(layout, viewport_width_px=viewport_width_px)
+    # Breakpoint choice and scaled grid math are part of the snapshot receipt.
+    # Keep them deterministic so UI lint and screenshot tests see the same boxes.
     effective_scale = _effective_scale(scale=scale, selected_breakpoint=selected_breakpoint)
     grid_payload = _effective_grid(
         layout,
@@ -463,6 +471,8 @@ def build_ui_layout_snapshot(
     )
 
     issues: list[dict[str, Any]] = []
+    # Report layout violations instead of auto-fixing them. Silent repair would
+    # hide broken metadata from plugin authors and UI review tests.
     for left_index, left in enumerate(widget_boxes):
         for right in widget_boxes[left_index + 1:]:
             if not _boxes_overlap(left, right):

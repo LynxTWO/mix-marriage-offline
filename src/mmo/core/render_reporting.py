@@ -95,6 +95,8 @@ def with_render_report_fallback_defaults(report: dict[str, Any]) -> dict[str, An
         normalized["fallback_final"] = defaults["fallback_final"]
         return normalized
 
+    # Fill missing fallback keys without overwriting explicit report values.
+    # Readers need a stable shape, but planner or executor truth stays primary.
     merged_fallback_final = _json_clone(defaults["fallback_final"])
     for key, value in fallback_final.items():
         merged_fallback_final[key] = _json_clone(value)
@@ -223,6 +225,8 @@ def sort_stage_entries(entries: list[dict[str, Any]] | None) -> list[dict[str, A
     deduped: list[dict[str, Any]] = []
     seen: set[str] = set()
     for entry in normalized:
+        # Deduplicate after sorting so repeated stage rows from merged receipts
+        # do not change report meaning or create order-only diff noise.
         signature = json.dumps(entry, ensure_ascii=True, sort_keys=True)
         if signature in seen:
             continue
@@ -236,6 +240,8 @@ def build_wall_clock_report(
     stages: list[dict[str, Any]] | None,
     disclaimer: str | None = None,
 ) -> dict[str, Any] | None:
+    # Wall-clock timing is useful for operator context but not reproducible.
+    # Keep it opt-in and separate from deterministic render facts.
     normalized_stages: list[dict[str, Any]] = []
     for row in stages or []:
         if not isinstance(row, dict):
@@ -279,6 +285,8 @@ def _resolved_layout_index(plan: dict[str, Any]) -> dict[str, dict[str, Any]]:
     for row in _resolved_layout_rows(plan):
         layout_id = _coerce_str(row.get("target_layout_id")).strip()
         channel_order = _coerce_channel_order(row.get("channel_order"))
+        # Planner-owned layout rows stay authoritative here. Re-deriving channel
+        # order from later outputs would hide planning/reporting mismatches.
         if not layout_id or not channel_order:
             continue
         channel_count = _coerce_int(row.get("channel_count"))
@@ -797,6 +805,8 @@ def _loudness_profile_receipt(plan: dict[str, Any]) -> dict[str, Any]:
     try:
         return resolve_loudness_profile_receipt(requested_profile_id)
     except ValueError as exc:
+        # Reports keep a receipt shape even when the requested profile goes
+        # stale. Warn and fall back instead of dropping loudness policy context.
         fallback = resolve_loudness_profile_receipt(DEFAULT_LOUDNESS_PROFILE_ID)
         warnings = list(fallback.get("warnings") or [])
         warnings.insert(
@@ -1156,6 +1166,8 @@ def build_render_report_from_plan(
         "schema_version": "0.1.0",
     }
     report = with_render_report_fallback_defaults(report)
+    # Stage rows are normalized at the end so dry-run, skipped, and partial
+    # plan reports keep the same ordering rules as executed reports.
     report["stage_metrics"] = sort_stage_entries(stage_metrics)
     report["stage_evidence"] = sort_stage_entries(stage_evidence)
     wall_clock_payload = build_wall_clock_report(

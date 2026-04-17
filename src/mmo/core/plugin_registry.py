@@ -168,6 +168,8 @@ def validate_manifest(
     Returns:
         List of human-readable error strings. Empty list means valid.
     """
+    # Collect every issue in one pass so CLI and GUI validation can show the
+    # whole manifest problem set instead of stopping on the first failure.
     errors: List[str] = []
 
     # 1. JSON schema validation
@@ -189,6 +191,8 @@ def validate_manifest(
         try:
             semantics = load_semantics()
         except Exception as exc:
+            # Without the ontology semantics doc, registry validation cannot
+            # prove host-planning constraints. Report that root cause directly.
             errors.append(f"[semantics] Could not load plugin_semantics.yaml: {exc}")
             return errors
 
@@ -308,6 +312,8 @@ def _validate_semantics(
 
     scene = capabilities.get("scene")
     scene_scope = capabilities.get("scene_scope")
+    # The host planner needs an explicit scene_scope instead of inferring one
+    # from older bed_only or scene flags.
     if scene_scope not in semantics.valid_scene_scopes:
         errors.append(
             f"[semantics] {ISSUE_SEMANTICS_SCENE_SCOPE_INVALID}: "
@@ -342,6 +348,8 @@ def _validate_semantics(
             )
 
     layout_safety = capabilities.get("layout_safety")
+    # layout_safety must be explicit because UI, scene planning, and install
+    # checks cannot safely guess whether a plugin is layout-agnostic.
     if layout_safety not in semantics.valid_layout_safety:
         errors.append(
             f"[semantics] {ISSUE_SEMANTICS_LAYOUT_SAFETY_INVALID}: "
@@ -462,6 +470,8 @@ def load_and_validate_plugins(
             errors_by_path[str(manifest_path)] = errs
 
     if errors_by_path:
+        # Registry load fails for the whole root. Partial success would make the
+        # discovered plugin set depend on manifest ordering inside one directory.
         raise PluginRegistryError(errors_by_path)
 
     # Delegate actual loading to the single-root pipeline loader.

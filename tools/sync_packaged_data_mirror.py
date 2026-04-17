@@ -43,6 +43,8 @@ MIRROR_PAIRS: tuple[MirrorPair, ...] = (
         include_prefixes=("detectors/", "resolvers/", "renderers/"),
     ),
 )
+# Packaged plugin mirrors stay manifest-only on purpose. Shipping source modules
+# here would create a second plugin authority root inside the wheel.
 
 IGNORED_NAMES: frozenset[str] = frozenset({
     ".DS_Store",
@@ -155,7 +157,8 @@ def sync(*, dry_run: bool = False) -> dict[str, list[str]]:
         for rel in sorted(src_files):
             src_file = src_dir / rel
             dst_file = dst_dir / rel
-            # Quick content compare to avoid unnecessary writes.
+            # Skip byte-identical files so release packaging does not churn the
+            # mirror and mask real packaged-data drift.
             if dst_file.exists() and dst_file.read_bytes() == src_file.read_bytes():
                 continue
             tag = f"COPY  {pair.src_rel}/{rel} -> {pair.dst_rel}/{rel}"

@@ -20,6 +20,8 @@ function _pathTail(pathValue) {
 }
 
 function _measurementValue(measurements, evidenceIds = []) {
+  // Some reports carry both current and legacy evidence IDs for the same
+  // meter. Caller order decides which one the browser treats as primary.
   const ids = new Set(
     Array.isArray(evidenceIds)
       ? evidenceIds.filter((item) => typeof item === "string" && item.trim())
@@ -110,6 +112,8 @@ export function buildMeterRowsFromReport(report) {
     }
     const measurements = Array.isArray(stem.measurements) ? stem.measurements : [];
     const metrics = _isObject(stem.metrics) ? stem.metrics : {};
+    // Prefer receipt measurements over legacy summary fields so browser cards
+    // stay aligned with the evidence-backed report contract.
     const peakDbfs = (
       _measurementValue(measurements, ["EVID.METER.PEAK_DBFS", "EVID.METER.SAMPLE_PEAK_DBFS"])
       ?? _coerceNumber(metrics.peak_dbfs)
@@ -144,6 +148,8 @@ export function buildMeterRowsFromReport(report) {
     rows.push(row);
   }
   rows.sort((left, right) => {
+    // Peak-first ordering keeps the hottest stems at the top. Label fallback
+    // keeps redraw order stable when peaks tie.
     const leftPeak = left.peak_dbfs ?? Number.NEGATIVE_INFINITY;
     const rightPeak = right.peak_dbfs ?? Number.NEGATIVE_INFINITY;
     if (leftPeak !== rightPeak) {
@@ -169,6 +175,8 @@ export function buildMeterRowsFromRenderQa(qaPayload) {
       }
       const metrics = _isObject(output.metrics) ? output.metrics : {};
       const pathValue = _nonEmptyString(output.path);
+      // Render QA rows stay keyed to the receipt path. Display labels are only
+      // for the UI, not for pairing outputs back to QA evidence.
       rows.push(
         {
           channel_count: Number.isInteger(output.channel_count) ? output.channel_count : null,
@@ -188,6 +196,8 @@ export function buildMeterRowsFromRenderQa(qaPayload) {
     });
   }
   rows.sort((left, right) => {
+    // Job id and output path keep QA rows stable across refreshes and match the
+    // comparison resolver's pairing rules.
     const leftJob = _nonEmptyString(left.job_id);
     const rightJob = _nonEmptyString(right.job_id);
     if (leftJob !== rightJob) {
@@ -200,6 +210,8 @@ export function buildMeterRowsFromRenderQa(qaPayload) {
 
 export function buildMeterSummary(rows) {
   const validRows = Array.isArray(rows) ? rows : [];
+  // Summary cards only aggregate meters the browser has. Missing
+  // values stay missing instead of being backfilled from neighboring rows.
   const peaks = validRows.map((row) => _coerceNumber(row.peak_dbfs)).filter((value) => value !== null);
   const rmsValues = validRows.map((row) => _coerceNumber(row.rms_dbfs)).filter((value) => value !== null);
   const truePeaks = validRows.map((row) => _coerceNumber(row.true_peak_dbtp)).filter((value) => value !== null);
@@ -239,6 +251,8 @@ export function buildMeterHistogram(
       min: null,
     };
   }
+  // Caller min and max win when present so saved views and tests get repeatable
+  // bins. The fallback span is padded and clamped to avoid zero-width charts.
   const resolvedMin = min !== null && Number.isFinite(min)
     ? Number(min)
     : Math.floor(Math.min(...values) - 1);
@@ -272,6 +286,8 @@ export function buildMeterHistogram(
 
 export function buildSceneDistribution(preview, layoutId) {
   const layoutOptions = Array.isArray(preview?.layout_options) ? preview.layout_options : [];
+  // The selected layout is the only speaker frame the browser may use here.
+  // Object azimuth alone is not enough to invent a target speaker set.
   const selectedLayout = layoutOptions.find(
     (row) => _isObject(row) && _nonEmptyString(row.layout_id) === _nonEmptyString(layoutId),
   );
@@ -314,6 +330,8 @@ export function buildSceneDistribution(preview, layoutId) {
     if (!row) {
       continue;
     }
+    // Inferred positions count less than explicit ones so guessed placement
+    // does not look as certain as inspected layout evidence.
     let weight = 0.25 + (confidence * 0.75);
     if (objectRow.inferred_position === true) {
       weight *= 0.85;
@@ -349,6 +367,8 @@ export function resolveAuditionQaComparison(qaPayload, jobId, outputPath = "") {
   const comparisons = Array.isArray(job.comparisons)
     ? job.comparisons.filter((row) => _isObject(row))
     : [];
+  // Output path is the safe pairing key when one job emits multiple files.
+  // First-entry fallback keeps single-output jobs readable in the UI.
   const output = normalizedOutputPath
     ? outputs.find((row) => _nonEmptyString(row.path) === normalizedOutputPath) || outputs[0] || null
     : outputs[0] || null;

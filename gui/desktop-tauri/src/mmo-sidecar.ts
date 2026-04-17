@@ -120,6 +120,8 @@ export function normalizePath(pathValue: string): string {
 }
 
 function isDirectMediaUrl(pathValue: string): boolean {
+  // Browser and test URLs are already resolved pointers. Converting them again
+  // would break blob/data sources and hide path-bridge bugs behind fake file URLs.
   return /^(?:asset|blob|data|https?):/iu.test(pathValue);
 }
 
@@ -257,6 +259,8 @@ function createSidecar(args: string[], options: MmoRunOptions): Command<string> 
 }
 
 function parseRpcEnvelope<T extends Record<string, unknown>>(line: string): MmoRpcEnvelope<T> | null {
+  // Desktop RPC is one JSON object per line. Ignore partial or malformed lines
+  // instead of guessing where an envelope ends.
   let parsed: unknown;
   try {
     parsed = JSON.parse(line);
@@ -333,6 +337,8 @@ export async function readArtifactJson<T>(path: string): Promise<T | null> {
   if (text === null) {
     return null;
   }
+  // Artifact JSON is UI state authority. A parse failure must look missing so
+  // the desktop app does not treat half-written files as valid evidence.
   try {
     return JSON.parse(text) as T;
   } catch {
@@ -350,6 +356,8 @@ export function resolveArtifactMediaUrl(path: string): string | null {
   if (!normalized) {
     return null;
   }
+  // Filesystem paths need the Tauri bridge. Direct media URLs skip that bridge
+  // so tests and browser-owned sources keep their original authority.
   if (isDirectMediaUrl(normalized)) {
     return normalized;
   }
@@ -381,6 +389,8 @@ export async function executeMmo(
 ): Promise<MmoRunResult> {
   const result = normalizeCommandOutput(await createSidecar(args, options).execute());
 
+  // Replay buffered output through the same line parser as streaming runs so
+  // short stages and long stages leave the same operator-facing timeline.
   for (const line of result.stdout.replace(/\r\n/g, "\n").split("\n")) {
     if (line.length > 0) {
       emitLogLine(options, "stdout", line);
@@ -400,6 +410,8 @@ export async function spawnMmo(
   options: MmoRunOptions = {},
 ): Promise<MmoRunResult> {
   const command = createSidecar(args, options);
+  // Keep the raw byte stream and the parsed line view in lockstep. Render
+  // progress needs live payloads, but failure summaries still rely on raw text.
   const stdoutBuffer = new LineBuffer();
   const stderrBuffer = new LineBuffer();
   let stdout = "";
@@ -475,6 +487,8 @@ export async function runMmoRpc<T extends Record<string, unknown>>(
   const stdoutBuffer = new LineBuffer();
   let child: Child | null = null;
   try {
+    // Give each RPC call its own short-lived sidecar. Reusing a child would let
+    // stale stdout, stderr, or request state leak across desktop screens.
     const response = await new Promise<MmoRpcEnvelope<T>>((resolve, reject) => {
       let settled = false;
       let stdout = "";
@@ -504,6 +518,8 @@ export async function runMmoRpc<T extends Record<string, unknown>>(
         const text = String(chunk);
         stdout += text;
         stdoutBuffer.push(text, (line) => {
+          // Only a complete JSONL envelope counts as a reply. Partial lines stay
+          // buffered until close so a short write does not become fake success.
           const payload = parseRpcEnvelope<T>(line);
           if (payload !== null) {
             window.clearTimeout(timer);
@@ -532,6 +548,8 @@ export async function runMmoRpc<T extends Record<string, unknown>>(
         if (!settled) {
           const stderrText = stderr.trim();
           const stdoutText = stdout.trim();
+          // If the RPC child exits without a final envelope, keep the captured
+          // output in the thrown error. That is often the only startup clue.
           const detail = stderrText || stdoutText || "RPC process closed before returning a response.";
           settleReject(
             new Error(
@@ -567,6 +585,8 @@ export async function runMmoRpc<T extends Record<string, unknown>>(
     }
     return (response.result ?? {}) as T;
   } finally {
+    // Always tear down the helper after one request. Hung children would keep
+    // file handles and sidecar state alive after the desktop UI moved on.
     const activeChild = child as { kill: () => Promise<void> } | null;
     if (activeChild !== null) {
       await activeChild.kill().catch(() => undefined);

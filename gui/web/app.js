@@ -100,6 +100,8 @@ const chainPluginSelect = document.getElementById("chain-plugin-select");
 const maxTheoreticalQualityToggle = document.getElementById("max-theoretical-quality-toggle");
 const fineModeIndicator = document.getElementById("fine-mode-indicator");
 
+// Browser state mixes disk-backed receipts with unsaved UI drafts. When a
+// later refresh disagrees, project.show and artifact files stay authoritative.
 const state = {
   projectShow: null,
   uiBundle: null,
@@ -412,6 +414,8 @@ function _bindFineStepInput(input, field) {
 }
 
 async function apiRpc(method, params = {}) {
+  // The local bridge is trusted only after HTTP success and RPC shape checks.
+  // Refuse partial payloads here so the UI does not invent a backend result.
   const response = await fetch("/api/rpc", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -446,6 +450,8 @@ async function loadUiBundle(uiBundlePath) {
   if (!response.ok) {
     throw new Error(payload.error || `HTTP ${response.status}`);
   }
+  // Missing plugin or scene payloads stay explicit empties. The browser can
+  // reset local panels, but it should not guess fields the backend did not ship.
   const plugins = Array.isArray(payload.plugins) ? payload.plugins : [];
   const bundle = _isObject(payload.ui_bundle) ? payload.ui_bundle : {};
   state.uiBundle = _deepClone(bundle);
@@ -466,6 +472,8 @@ async function loadRenderRequest(renderRequestPath) {
   if (!response.ok) {
     throw new Error(payload.error || `HTTP ${response.status}`);
   }
+  // The editor mirrors render_request.json only when the bridge returned a real
+  // object payload. Missing structure is a load failure, not a local default.
   if (!_isObject(payload.render_request)) {
     throw new Error("render_request payload missing.");
   }
@@ -485,6 +493,8 @@ async function loadRenderArtifact(artifactPath) {
   if (!response.ok) {
     throw new Error(payload.error || `HTTP ${response.status}`);
   }
+  // Artifact routes can return JSON objects, arrays, or scalar content. Keep
+  // the bridge metadata alongside the parsed payload instead of reshaping it.
   return {
     artifact: payload.artifact,
     artifactName: typeof payload.artifact_name === "string" ? payload.artifact_name : "",
@@ -955,6 +965,8 @@ function _isEditablePlugin(plugin) {
 }
 
 function _setEditablePlugins(plugins) {
+  // Only schema-backed plugins join the local chain editor. The browser should
+  // not invent editable params for payloads it cannot round-trip safely.
   const editable = Array.isArray(plugins)
     ? plugins.filter((plugin) => _isEditablePlugin(plugin))
     : [];
@@ -1049,6 +1061,8 @@ function _resetRenderArtifactsState() {
 }
 
 function _recordRenderRefusal(error) {
+  // Refusals start as session-local browser receipts. A later render refresh or
+  // project.show reload can replace them with disk-backed artifact truth.
   const rpcCode = typeof error?.rpcCode === "string" ? error.rpcCode : "RPC.ERROR";
   const rpcMessage = typeof error?.rpcMessage === "string"
     ? error.rpcMessage
@@ -1062,6 +1076,8 @@ function _recordRenderRefusal(error) {
 }
 
 function _clearRenderRefusal() {
+  // Clear the local refusal note before a new run so stale browser errors do
+  // not look like the next disk-backed render outcome.
   state.renderArtifacts.lastRefusal = null;
 }
 
@@ -1514,6 +1530,8 @@ function _renderAuditionReceipt(selectedJob, streamKind) {
 }
 
 async function _applyAuditionCompensation(streamKind, selectedJob) {
+  // Loudness matching is preview-only. It trims the browser gain node and does
+  // not rewrite render outputs or pointer metadata on disk.
   if (!state.audition.loudnessMatchEnabled) {
     await _applyAuditionGainDb(0);
     _renderAuditionReceipt(selectedJob, streamKind);
@@ -1704,6 +1722,8 @@ function _renderAuditionVisualOverlays() {
 }
 
 async function _decodeAuditionPointerSummary(jobId, streamKind, slot, sha256) {
+  // Cache by content hash when present so repeated preview clicks do not keep
+  // re-decoding the same file through the local audio bridge.
   const cacheKey = sha256 || `${jobId}:${streamKind}:${slot}`;
   if (auditionOverlayCache.has(cacheKey)) {
     return auditionOverlayCache.get(cacheKey);
@@ -1721,6 +1741,7 @@ async function _decodeAuditionPointerSummary(jobId, streamKind, slot, sha256) {
     }
     const url = _auditionUrlFor(jobId, streamKind, slot);
     try {
+      // HEAD keeps oversized decode work out of the browser before a full fetch.
       const headResponse = await fetch(url, { method: "HEAD" });
       if (!headResponse.ok) {
         return null;
@@ -1774,6 +1795,7 @@ async function _refreshAuditionOverlays() {
     return;
   }
 
+  // Drop stale overlay responses when the user changes jobs or slots mid-load.
   const requestVersion = auditionOverlayRequestVersion + 1;
   auditionOverlayRequestVersion = requestVersion;
   state.audition.overlays = {
@@ -1805,6 +1827,8 @@ async function _refreshAuditionOverlays() {
     return;
   }
 
+  // QA spectra win over ad hoc browser decode when the render artifacts already
+  // carry analyzer output for this pointer pair.
   const qaInputSpectrum = normalizeSpectralProfile(qaMatch?.input?.spectral);
   const qaOutputSpectrum = normalizeSpectralProfile(qaMatch?.output?.spectral);
   const decodedInputSpectrum = normalizeSpectralProfile(inputSummary?.spectrum);
@@ -1848,6 +1872,8 @@ function _renderAuditionPanel() {
     return;
   }
 
+  // Audition options come from render_execute.json pointers. Without that file,
+  // the browser has nothing safe to stream or compare.
   const jobs = Array.isArray(state.renderArtifacts.execute?.jobs)
     ? state.renderArtifacts.execute.jobs.filter((job) => _isObject(job) && typeof job.job_id === "string" && job.job_id)
     : [];
@@ -1945,6 +1971,8 @@ function _auditionUrlFor(jobId, streamKind, slot) {
   if (!projectDir) {
     throw new Error("Project directory is required before auditioning.");
   }
+  // Build the URL from project and job identifiers only. The server resolves
+  // the pointer through render_execute.json and its allowlisted path rules.
   const query = new URLSearchParams({
     job_id: jobId,
     project_dir: projectDir,
@@ -1963,6 +1991,8 @@ async function _playAudition(streamKind) {
   if (!auditionAudio) {
     return;
   }
+  // Resolve preview gain before loading the next source so the browser A/B path
+  // stays aligned with the selected pointers and loudness-match toggle.
   state.audition.activeStream = streamKind;
   await _applyAuditionCompensation(streamKind, _selectedAuditionJobOrNull());
   const label = streamKind === "input" ? "input" : "output";
@@ -2001,6 +2031,8 @@ function _renderTimelineEntries() {
   const sortedJobIds = Array.from(availableJobIds).sort();
   const sortedStages = Array.from(availableStages).sort();
 
+  // Event log contents can change on every run. Clear filters that no longer
+  // exist so the browser does not hide fresh entries behind stale state.
   if (knownJobFilter && !availableJobIds.has(knownJobFilter)) {
     state.renderArtifacts.timelineFilterJob = "";
   }
@@ -2085,6 +2117,8 @@ function _renderTimelineEntries() {
 }
 
 function _renderRunSummaryBlock() {
+  // Keep missing report evidence explicit. A partial render session should show
+  // which receipts exist instead of looking complete from browser memory alone.
   const report = _isObject(state.renderArtifacts.report) ? state.renderArtifacts.report : null;
   const jobs = Array.isArray(report?.jobs) ? report.jobs : [];
   const summaryJobs = jobs
@@ -2168,6 +2202,8 @@ function _renderDeterminismReceipt() {
     }
   }
 
+  // Fall back to report hashes only when execute pointers are missing. That
+  // keeps the receipt visible without pretending execute evidence exists.
   if (outputSha.size === 0) {
     const reportJobs = Array.isArray(state.renderArtifacts.report?.jobs)
       ? state.renderArtifacts.report.jobs
@@ -2372,6 +2408,8 @@ function _safeRunQaSummary(qaPayload) {
 }
 
 function _buildSafeRunReceiptPayload() {
+  // Merge execute and QA receipts into one browser copy payload. Missing files
+  // stay visible as nulls or empty lists instead of implied success.
   const execute = _isObject(state.renderArtifacts.execute) ? state.renderArtifacts.execute : null;
   const qa = _isObject(state.renderArtifacts.qa) ? state.renderArtifacts.qa : null;
   const runId = _nonEmptyString(execute?.run_id) || _nonEmptyString(qa?.run_id);
@@ -2442,6 +2480,8 @@ function renderRenderArtifactsViewer() {
 }
 
 async function refreshRenderArtifactsFromProjectShow(projectShow) {
+  // Project.show owns which artifact files exist for this project state. Load
+  // only the receipt paths it reports instead of scanning the renders folder.
   const reportPath = _artifactPathFromProjectShow(projectShow, "renders/render_report.json");
   const executePath = _artifactPathFromProjectShow(projectShow, "renders/render_execute.json");
   const eventLogPath = _artifactPathFromProjectShow(projectShow, "renders/event_log.jsonl");
@@ -2508,6 +2548,8 @@ function _scenePreviewLayoutOptions(preview) {
 
 function _scenePreviewPreferredLayoutId(layoutRows, preview) {
   const available = new Set(layoutRows.map((row) => row.layout_id));
+  // Prefer render_request target layouts first so the preview follows the last
+  // saved backend intent before falling back to scene-preview defaults.
   for (const layoutId of state.renderRequestIntent.target_layout_ids) {
     if (available.has(layoutId)) {
       return layoutId;
@@ -3074,6 +3116,8 @@ function _renderScenePreview() {
   if (!scenePreviewOutput) {
     return;
   }
+  // Keep preview absence explicit. The canvas should not invent a stage layout
+  // when the backend did not ship scene-preview evidence.
   if (!_isObject(preview)) {
     scenePreviewOutput.textContent = "Scene preview unavailable. Build GUI payload with a scene.json pointer.";
     return;
@@ -3204,6 +3248,8 @@ function _hydrateSceneLocksInspect(payload) {
 }
 
 function _updateSceneLockRow(stemId, patch) {
+  // Row edits stay local until saveSceneLocks sends them back through the
+  // backend. Re-render the editor, but do not treat this as persisted state.
   const nextRows = state.sceneLocks.objects.map((row) => {
     if (row.stemId !== stemId) {
       return row;
@@ -3378,6 +3424,8 @@ async function refreshSceneLocks() {
     }
     return;
   }
+  // Inspect is the source of truth for the current draft plus saved overrides.
+  // Rebuild the local editor state from that payload on every refresh.
   const result = await apiRpc("scene.locks.inspect", { project_dir: projectDir });
   _hydrateSceneLocksInspect(result);
   _renderSceneLocksEditor();
@@ -3405,6 +3453,8 @@ async function saveSceneLocks() {
   if (!projectDir) {
     throw new Error("Project directory is required.");
   }
+  // These rows are a browser draft until save succeeds. Only the RPC write plus
+  // follow-up inspect call can confirm what landed on disk.
   const rows = Array.isArray(state.sceneLocks.objects)
     ? state.sceneLocks.objects.map((row) => ({
       front_only: row.editFrontOnly === true,
@@ -3429,6 +3479,8 @@ async function saveSceneLocks() {
   if (sceneLocksOutput) {
     sceneLocksOutput.textContent = JSON.stringify(saveResult, null, 2);
   }
+  // Re-read inspect output after save so the editor stays aligned with the
+  // persisted scene draft rather than trusting optimistic local state.
   await refreshSceneLocks();
   setStatus("scene_locks.yaml saved and scene draft updated.");
 }
@@ -3456,6 +3508,8 @@ function _syncMaxTheoreticalQualityToggle() {
 }
 
 function _resetRenderRequestIntent() {
+  // Clear local intent when render_request.json is missing so old chain state
+  // does not leak across projects or stale project.show results.
   state.renderRequestIntent = {
     dry_run: null,
     max_theoretical_quality: null,
@@ -3483,6 +3537,8 @@ function _hydrateRenderRequestIntent(renderRequestPath, renderRequestPayload) {
     policies.gates_policy_id = options.gates_policy_id.trim();
   }
 
+  // Hydrate the local editor from the saved render_request payload. The browser
+  // can reorder or tweak drafts later, but disk-backed intent wins on reload.
   state.pluginChain = _chainFromRpcPayload(options.plugin_chain);
   state.renderRequestIntent = {
     dry_run: typeof options.dry_run === "boolean" ? options.dry_run : null,
@@ -3914,6 +3970,8 @@ async function savePluginChain() {
   if (!projectDir) {
     throw new Error("Project directory is required.");
   }
+  // The chain editor is local draft state until project.write_render_request
+  // echoes back the saved payload from render_request.json.
   const pluginChain = _pluginChainPayload();
   const maxTheoreticalQuality = Boolean(maxTheoreticalQualityToggle?.checked);
   if (pluginChain.length === 0) {
@@ -3948,6 +4006,8 @@ async function runSafeRun() {
     throw new Error("Project directory is required.");
   }
 
+  // Safe Run writes its preset through the backend first. The browser does not
+  // mutate render_request state locally and call render_run later.
   setStatus("Calling project.write_render_request (Safe Run preset)...");
   const writeResult = await apiRpc("project.write_render_request", {
     project_dir: projectDir,
@@ -4047,6 +4107,8 @@ function _artifactPathFromProjectShow(projectShow, artifactPath) {
       artifact.path === artifactPath &&
       artifact.exists === true,
   );
+  // Only trust absolute paths that project.show marked present. The browser
+  // should not guess render-artifact locations from relative names alone.
   return match && typeof match.absolute_path === "string"
     ? match.absolute_path
     : "";
@@ -4066,6 +4128,8 @@ async function refreshProjectShow() {
     throw new Error("Project directory is required.");
   }
   setStatus("Calling project.show...");
+  // Project.show is the browser hydration root for this shell. Every later
+  // panel refresh hangs off the artifact and path receipts it returns.
   const result = await apiRpc("project.show", { project_dir: projectDir });
   state.projectShow = result;
   projectOutput.textContent = JSON.stringify(result, null, 2);
@@ -4153,6 +4217,8 @@ async function runBuildGuiAndRefresh() {
   });
 
   projectOutput.textContent = JSON.stringify(buildResult, null, 2);
+  // Refresh from project.show after build_gui so the browser rehydrates from
+  // disk-backed artifacts instead of trusting pre-build local state.
   setStatus("project.build_gui completed. Refreshing project.show...");
   await refreshProjectShow();
 }

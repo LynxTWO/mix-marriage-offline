@@ -8,6 +8,8 @@ from typing import List, Optional
 
 
 def _command_for_path(path: Path) -> List[str]:
+    # Repo tests and packaged tools can point at Python shims. Wrap them with
+    # the active interpreter so explicit tool paths behave the same on every OS.
     if path.suffix.lower() == ".py":
         return [sys.executable, str(path)]
     return [str(path)]
@@ -19,6 +21,8 @@ def _resolve_explicit_tool(env_var: str) -> Optional[List[str]]:
         candidate = Path(env_path)
         if candidate.exists():
             return _command_for_path(candidate)
+        # An explicit override is an authority claim. Fail closed here instead
+        # of silently switching to a different binary from PATH.
         return None
     return []
 
@@ -49,6 +53,8 @@ def resolve_ffprobe_cmd() -> Optional[List[str]]:
         if not ffmpeg_path.exists():
             return None
 
+        # Pair ffprobe with the explicit ffmpeg install before falling back to
+        # PATH, or metadata can come from a different tool build.
         candidate_paths: list[Path] = []
         renamed = ffmpeg_path.name.replace("ffmpeg", "ffprobe", 1)
         if renamed != ffmpeg_path.name:

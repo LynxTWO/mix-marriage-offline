@@ -72,7 +72,8 @@ most important artifacts: `Receipt`, `Manifest`, and `QA`.
 
 ## What MMO Ships Today
 
-- Packaged desktop workflow for `Validate -> Analyze -> Scene -> Render -> Results -> Compare`
+- Packaged desktop workflow for
+  `Validate -> Analyze -> Scene -> Render -> Results -> Compare`
 - Deterministic JSON artifacts that explain each step instead of hiding it
 - Mix-once/render-many delivery across stereo, surround, immersive, and
   binaural targets

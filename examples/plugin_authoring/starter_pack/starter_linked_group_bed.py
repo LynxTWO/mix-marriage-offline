@@ -29,6 +29,8 @@ class StarterLinkedGroupBed:
                 "AudioBufferF64 sample_rate_hz must match sample_rate_hz.",
             )
 
+        # Linked-group mode sees one lawful speaker group at a time. The host
+        # uses that to enforce bed-only scope before plugin code runs.
         gain_db = float(params.get("gain_db", 0.0))
         gain_linear = math.pow(10.0, gain_db / 20.0)
         rendered = grouped_channels.to_channel_matrix(np=np, dtype=np.float64)
@@ -54,6 +56,8 @@ class StarterLinkedGroupBed:
         output_dir=None,
     ):
         del session, output_dir
+        # The manifest notes and skipped rows from run_renderers carry the real
+        # bed-only audit trail. This receipt only echoes what reached the plugin.
         received_ids = sorted(
             {
                 rec.get("recommendation_id")

@@ -128,9 +128,15 @@ def _resolve_stem_source_path(
     stems_dir_path: Path,
 ) -> Path | None:
     del stems_dir_path
+    # Run stereo-hint inference on the same canonical path that later scene and
+    # render stages use. If this drifts, hints can describe a different file
+    # than the one later rendered.
     candidate = resolved_stem_path(stem)
     if candidate is None:
         return None
+    # The current stereo feature extractor only trusts WAV inputs here. Other
+    # formats stay advisory-free instead of adding a second decode path inside
+    # scene assembly.
     if candidate.suffix.lower() not in _WAV_EXTENSIONS:
         return None
     return candidate
@@ -399,10 +405,14 @@ def build_scene_from_session(
     if not stems_dir_raw:
         raise ValueError("validated_session.stems_dir is required.")
     stems_dir_path = Path(stems_dir_raw)
+    # Scene receipts use an absolute anchor here so later render and lock
+    # helpers do not have to guess which workspace the session came from.
     if not stems_dir_path.is_absolute():
         raise ValueError("validated_session.stems_dir must be an absolute path.")
     stems_dir_posix = stems_dir_path.resolve().as_posix()
 
+    # Normalize stem locators before any inference so object ordering and
+    # source-backed hints all see the same canonical stem payload.
     stems = resolve_session_stems(validated_session)
 
     meter_index = _index_metering(metering_report)
@@ -423,6 +433,8 @@ def build_scene_from_session(
             source_path = _resolve_stem_source_path(stem=stem, stems_dir_path=stems_dir_path)
             if source_path is not None:
                 try:
+                    # Stereo hints stay advisory. Failure here should not block
+                    # scene creation or hide the rest of the session.
                     stereo_hints = infer_stereo_hints(source_path)
                 except ValueError:
                     stereo_hints = None
@@ -477,10 +489,12 @@ def build_scene_from_session(
                     }
                 )
 
-    # Stable sort: stem_id then object_id
+    # Sort once here so repeated scene builds stay deterministic even if the
+    # incoming stem order changed upstream.
     objects.sort(key=lambda o: (o["stem_id"], o["object_id"]))
 
-    # Default bed/field entry
+    # Leave the field bed present even for object-only sessions so later layout
+    # and precedence code can rely on one stable bed anchor.
     beds: list[dict[str, Any]] = [
         {
             "bed_id": "BED.FIELD.001",
@@ -525,7 +539,8 @@ def build_scene_from_session(
     if normalized_lock_hash:
         source["lock_hash"] = normalized_lock_hash
 
-    # Scene ID
+    # Explicit scene IDs win. Otherwise the lock hash is the stable override
+    # key, and only the no-lock fallback stays generic.
     override_id = _coerce_str(scene_id).strip() or None
     if override_id:
         final_scene_id = override_id
@@ -792,6 +807,8 @@ def build_scene_from_bus_plan(
 
     merged_rows: list[dict[str, str | float]] = []
     seen_stem_ids: set[str] = set()
+    # Prefer bus-plan rows when they exist, then fill gaps from stems_map so
+    # scene scaffolding stays complete without inventing duplicate stems.
     for item in bus_assignments_raw:
         if not isinstance(item, dict):
             continue
@@ -883,6 +900,9 @@ def build_scene_from_bus_plan(
         is_object_candidate = is_anchor_object or is_close_instrument
 
         if is_bed_candidate:
+            # Ambience and return-style material collapse to beds on purpose.
+            # Unknowns that are not clearly bed-like stay as low-confidence
+            # objects instead of disappearing into a diffuse bucket.
             content_hint = _scene_intent_content_hint(tokens)
             bed_bucket = bed_buckets.setdefault(bus_id, [])
             bed_bucket.append(
@@ -916,6 +936,8 @@ def build_scene_from_bus_plan(
         )
 
     objects: list[dict[str, Any]] = []
+    # Sort object scaffolding before IDs and labels are assigned so repeated
+    # scene drafts keep one object list and one note order.
     for index, row in enumerate(
         sorted(
             object_rows,
@@ -979,6 +1001,8 @@ def build_scene_from_bus_plan(
         objects.append(object_payload)
 
     beds: list[dict[str, Any]] = []
+    # Build each bed from its whole bucket in one pass so stem_ids, width
+    # hints, and confidence stay internally consistent.
     for bus_id in sorted(bed_buckets.keys()):
         bucket = bed_buckets[bus_id]
         content_counts: dict[str, int] = {}
@@ -1044,6 +1068,8 @@ def build_scene_from_bus_plan(
         stems_map_ref=stems_map_ref,
         bus_plan_ref=bus_plan_ref,
     )
+    # Derive source refs and stems_dir from portable refs first. Scene drafts
+    # should survive repo moves better than machine-local absolute guesses.
     generated_utc = (
         _coerce_str(bus_plan.get("generated_utc")).strip()
         or _SCENE_INTENT_DEFAULT_GENERATED_UTC

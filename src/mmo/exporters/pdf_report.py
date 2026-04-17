@@ -220,6 +220,8 @@ def _compact_json(value: Any) -> str:
 
 
 def _sorted_recommendations(recommendations: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    # Keep the report PDF stable across runs. The same recommendation set should
+    # not reshuffle when upstream code hands in a different list order.
     return sorted(
         recommendations,
         key=lambda rec: (
@@ -465,6 +467,9 @@ def _gate_legend_table() -> Table:
 
 
 def _downmix_qa_log_payload(downmix_qa: Dict[str, Any]) -> Dict[str, Any]:
+    # Prefer the persisted QA log over recomputing summary fields here. The PDF
+    # needs to reflect the recorded QA artifact, even when older reports only
+    # carried that payload under measurements.
     log_value = downmix_qa.get("log")
     if isinstance(log_value, dict):
         return log_value
@@ -497,7 +502,10 @@ def _downmix_qa_log_payload(downmix_qa: Dict[str, Any]) -> Dict[str, Any]:
 
 def _downmix_qa_summary_fields(downmix_qa: Dict[str, Any]) -> List[tuple[str, Any]]:
     log_payload = _downmix_qa_log_payload(downmix_qa)
+
     def _pick(key: str) -> Any:
+        # Favor explicit top-level fields when present, but fall back to the log
+        # so older or partial reports still render one coherent QA summary.
         if key in downmix_qa and downmix_qa.get(key) is not None:
             return downmix_qa.get(key)
         return log_payload.get(key)
@@ -531,6 +539,8 @@ def _downmix_qa_key_measurement_rows(
         return _safe_str(entry.get("value")), _safe_str(entry.get("unit_id"))
 
     rows: List[List[str]] = []
+    # Keep these rows in one fixed order so PDF reviewers can compare downmix QA
+    # summaries quickly without scanning the raw measurement list.
     for label, src_id, ref_id, delta_id in [
         ("LUFS", "EVID.DOWNMIX.QA.LUFS_FOLD", "EVID.DOWNMIX.QA.LUFS_REF", "EVID.DOWNMIX.QA.LUFS_DELTA"),
         (
@@ -672,6 +682,8 @@ def _scene_diagram_lines(scene: Dict[str, Any]) -> List[str]:
     lines: List[str] = [f"Scene: {scene_id}"]
     if isinstance(objects, list):
         lines.append(f"Objects: {len(objects)}")
+        # Sort scene rows by stable ids so scene reviews do not depend on the
+        # in-memory object order from an earlier build step.
         for obj in sorted(
             (o for o in objects if isinstance(o, dict)),
             key=lambda o: str(o.get("object_id", "")),
@@ -701,6 +713,8 @@ def _preflight_gate_table(preflight: Dict[str, Any]) -> "Table | None":
         return None
     checks = preflight.get("checks", [])
     issues = preflight.get("issues", [])
+    # Merge checks and issues into one deterministic table so the PDF shows the
+    # full preflight record instead of implying that one side ran alone.
     rows: List[List[str]] = [["id", "severity", "message"]]
     if isinstance(checks, list):
         for check in sorted(
@@ -747,6 +761,8 @@ def _height_bed_notes(downmix_qa: Dict[str, Any]) -> List[str]:
     _immersive = {"LAYOUT.5_1_2", "LAYOUT.5_1_4", "LAYOUT.7_1_2", "LAYOUT.7_1_4"}
     if source_layout_id not in _immersive:
         return []
+    # Keep this section advisory. The actual fold policy lives in ontology and
+    # QA receipts, not in PDF-only prose.
     return [
         (
             f"Height-bed fold: {source_layout_id} \u2192 {target_layout_id}. "
@@ -1053,13 +1069,17 @@ def export_report_pdf(
 
     session = report.get("session", {})
     stems = session.get("stems", []) if isinstance(session, dict) else []
+    # Start with source-tag provenance so later issue and recommendation tables
+    # stay anchored to the analyzed artifact.
     story.append(Paragraph("Source Tags", styles["Heading2"]))
     story.append(Spacer(1, 6))
     for line in _source_tags_lines(stems):
         story.append(Paragraph(line, styles["Normal"]))
     story.append(Spacer(1, 12))
 
-    # Speaker layout summary table — show channel order for first stem layout × standard.
+    # Keep the speaker-layout section compact by showing only the first stem
+    # layout tied to the requested standard. Expanding every layout here would
+    # drown out the higher-risk review tables below.
     session_for_layout = report.get("session", {})
     stems_for_layout = session_for_layout.get("stems", []) if isinstance(session_for_layout, dict) else []
     first_layout_id = ""
@@ -1107,6 +1127,8 @@ def export_report_pdf(
         )
         story.append(Spacer(1, 12))
 
+        # Gate rows stay optional because some callers want a lighter PDF. When
+        # included, only emit the section if the report carries gate results.
         if include_gates and any(
             isinstance(rec.get("gate_results"), list) and rec.get("gate_results")
             for rec in clean_recommendations
@@ -1130,6 +1152,8 @@ def export_report_pdf(
             )
             story.append(Spacer(1, 12))
 
+    # Measurements can make the PDF large, so callers may opt out. That should
+    # not affect the higher-level issues and recommendation sections above.
     if include_measurements and isinstance(stems, list) and stems:
         story.append(Paragraph("Measurements", styles["Heading2"]))
         story.append(Spacer(1, 6))
@@ -1207,6 +1231,8 @@ def export_report_pdf(
     downmix_qa = report.get("downmix_qa")
     has_downmix_qa = isinstance(downmix_qa, dict)
     has_downmix_qa_gates = _has_downmix_qa_delta_gate_results(report)
+    # The PDF still needs a Downmix QA section when render gates blocked on QA
+    # deltas, even if the full downmix_qa payload is missing from the report.
     if has_downmix_qa or has_downmix_qa_gates:
         story.append(Spacer(1, 12))
         story.append(Paragraph("Downmix QA", styles["Heading2"]))

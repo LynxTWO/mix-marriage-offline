@@ -144,6 +144,8 @@ def load_loudness_profiles(path: Path | None = None) -> dict[str, dict[str, Any]
     )
 
     schema_version = payload.get("schema_version")
+    # Loudness profile semantics are contract-sensitive. Reject unknown schema
+    # versions instead of silently reinterpreting delivery metadata.
     if schema_version != _LOUDNESS_PROFILES_SCHEMA_VERSION:
         raise ValueError(
             "Unsupported loudness profiles schema_version: "
@@ -175,6 +177,8 @@ def list_loudness_profiles(path: Path | None = None) -> list[dict[str, Any]]:
 def get_loudness_profile(profile_id: str | None, path: Path | None = None) -> dict[str, Any]:
     normalized_profile_id = str(profile_id or "").strip()
     if not normalized_profile_id:
+        # The default profile id is explicit packaged policy, not "first profile
+        # in the file" or another runtime guess.
         normalized_profile_id = DEFAULT_LOUDNESS_PROFILE_ID
 
     profiles = load_loudness_profiles(path)
@@ -210,6 +214,8 @@ def resolve_loudness_profile_receipt(
         resolved_method_id = method.method_id
         method_implemented = bool(method.implemented)
         if not method_implemented:
+            # Keep the profile receipt usable even when the method registry lags.
+            # The warning makes the missing enforcement explicit to operators.
             warnings.append(
                 (
                     f"Loudness method {method.method_id!r} is registered but not implemented "

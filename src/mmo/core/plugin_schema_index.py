@@ -135,6 +135,8 @@ def _resolve_manifest_relative_file(
 
     plugin_dir = manifest_path.resolve().parent
     candidate = (plugin_dir / candidate_rel).resolve()
+    # UI metadata files stay inside the plugin directory so one manifest cannot
+    # point the browser tooling at arbitrary local files.
     try:
         candidate.relative_to(plugin_dir)
     except ValueError as exc:
@@ -175,6 +177,8 @@ def _config_schema_payload(
 
     payload: dict[str, Any] = {
         "present": schema_present,
+        # The pointer receipt lets UI tooling prove which manifest bytes owned
+        # the schema instead of treating a copied schema blob as authority.
         "pointer": {
             "manifest_path": resolved_manifest_path.as_posix(),
             "manifest_sha256": manifest_sha256,
@@ -198,6 +202,8 @@ def _ui_hints_payload(
     manifest_sha256 = _sha256_file(resolved_manifest_path)
     raw_schema = manifest.get("config_schema")
     schema_present = isinstance(raw_schema, dict)
+    # UI hints are derived from config_schema so the schema stays authoritative
+    # and hint payloads change only when the manifest changes.
     hint_rows = extract_ui_hints_rows(raw_schema) if schema_present else []
     hints_sha256 = _canonical_json_sha256(hint_rows) if schema_present else None
     return {
@@ -279,6 +285,8 @@ def build_plugins_config_schema_index(
     include_ui_hints: bool = False,
 ) -> dict[str, Any]:
     resolved_plugins_dir = _validate_plugins_dir(plugins_dir)
+    # Snapshot callers that ask for UI layout snapshots also need the base
+    # layout payload so they can trace the snapshot back to its source file.
     include_ui_layout_effective = include_ui_layout or include_ui_layout_snapshot
     rows: list[dict[str, Any]] = []
     for plugin in load_plugins(resolved_plugins_dir):
@@ -310,6 +318,7 @@ def build_plugins_config_schema_index(
             )
         rows.append(row)
 
+    # Keep row order stable for CLI snapshots, fixtures, and GUI diff views.
     rows.sort(
         key=lambda row: (
             str(row.get("plugin_id", "")),
@@ -370,6 +379,8 @@ def build_plugin_show_payload(
             and item.manifest.get("ui_layout", "").strip()
         ]
         if plugins_with_ui_metadata:
+            # When callers omit plugin_id, prefer an example plugin with real UI
+            # metadata so docs and smoke flows render a representative payload.
             plugins_with_ui_metadata.sort(
                 key=lambda item: (
                     0 if _is_examples_manifest_path(item.manifest_path) else 1,

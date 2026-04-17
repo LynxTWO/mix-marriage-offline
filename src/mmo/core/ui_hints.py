@@ -64,6 +64,8 @@ def _collect_hint_rows(
                     "hint": _json_clone(value.get("x_mmo_ui")),
                 }
             )
+        # Walk object keys in sorted order so extracted hint pointers stay
+        # stable across runs and JSON serialization details.
         for key in sorted(value.keys()):
             if key == "x_mmo_ui":
                 continue
@@ -128,6 +130,8 @@ def _lint_hint_rows(rows: list[dict[str, Any]]) -> list[dict[str, str]]:
     for row in rows:
         pointer = _coerce_str(row.get("json_pointer")).strip()
         hint_value = row.get("hint")
+        # Report every schema error against the original hint pointer so plugin
+        # authors can repair the manifest without guessing which hint failed.
         for err in validator.iter_errors(hint_value):
             errors.append(
                 {

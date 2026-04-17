@@ -102,6 +102,8 @@ def load_report_from_path_or_dir(path: Path | str) -> tuple[dict[str, Any], Path
                 "MMO expected a `report.json` file but received a folder path instead. "
                 f"{_compare_input_hint(candidate)}"
             )
+        # Compare treats a workspace folder and its canonical report.json as the
+        # same input so callers do not have to care which form they already have.
         report_path = candidate / "report.json"
         if not report_path.exists():
             raise ValueError(
@@ -169,6 +171,9 @@ def _normalize_output_format(value: Any) -> str:
 
 
 def _read_optional_json_object(path: Path) -> dict[str, Any]:
+    # Compare uses side artifacts only when they are readable and shaped like a
+    # JSON object. Missing or broken extras should degrade the comparison, not
+    # block the whole report load.
     if not path.exists():
         return {}
     try:
@@ -214,6 +219,8 @@ def _report_output_formats(report: dict[str, Any], *, report_path: Path) -> list
         if output_format:
             formats.add(output_format)
 
+    # Render/apply manifests capture what actually made it into side artifacts.
+    # Compare keeps both sources so config drift and emit drift are visible.
     formats.update(_manifest_output_formats(report_path))
     return sorted(formats, key=lambda item: (_OUTPUT_FORMAT_ORDER.get(item, 999), item))
 
@@ -257,6 +264,8 @@ def _build_loudness_match(report_path_a: Path, report_path_b: Path) -> dict[str,
     for method in _COMPARE_LOUDNESS_METHODS:
         measurement_a = _mean_render_qa_metric(qa_a, method["metric_key"])
         measurement_b = _mean_render_qa_metric(qa_b, method["metric_key"])
+        # Fair-listen only makes sense when both sides expose the same meter
+        # family. Keep searching rather than guessing from partial evidence.
         if measurement_a is None or measurement_b is None:
             continue
         compensation_db = _round_number(measurement_a - measurement_b, digits=1)
@@ -282,6 +291,8 @@ def _build_loudness_match(report_path_a: Path, report_path_b: Path) -> dict[str,
             ),
         }
 
+    # Missing paired QA artifacts should stay visible in the compare output.
+    # Hard-failing here would hide all the other comparison signals.
     return {
         "status": "unavailable",
         "enabled_by_default": False,
@@ -504,6 +515,8 @@ def _build_notes_and_warnings(
                 f"B={_format_number(_coerce_number(value.get('b')), precision=precision)})."
             )
     else:
+        # Keep "could not compare" separate from a zero delta so follow-up
+        # tooling can tell absence of evidence from an actual match.
         warnings.append(
             "Downmix QA metrics missing in one or both reports; LUFS/true peak/correlation "
             "deltas were not compared."
@@ -657,6 +670,8 @@ def build_compare_report(
         "notes": [],
         "warnings": [],
     }
+    # Compare builds notes after the raw diffs so the prose can reflect
+    # unavailable evidence without rewriting the machine-readable payload.
     notes, warnings = _build_notes_and_warnings(
         _coerce_dict(payload.get("diffs")),
         loudness_match=loudness_match,

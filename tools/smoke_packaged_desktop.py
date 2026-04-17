@@ -128,6 +128,8 @@ def _canonical_payload(value: Any) -> str:
 
 def _read_product_name(repo_root: Path) -> str:
     config_path = repo_root / "gui" / "desktop-tauri" / "src-tauri" / "tauri.conf.json"
+    # The smoke harness reads product identity from tauri.conf.json so artifact
+    # selection stays aligned with the bundle metadata the app ships.
     payload = json.loads(config_path.read_text(encoding="utf-8"))
     product_name = payload.get("productName")
     if not isinstance(product_name, str) or not product_name.strip():
@@ -155,6 +157,8 @@ def _find_artifact(*, bundle_root: Path, platform_tag: str) -> Path:
     if not candidates:
         suffix_text = ", ".join(suffixes)
         raise SmokeError(f"No {suffix_text} artifact found under {bundle_root}")
+    # Bundle selection is platform-specific because Windows publishes setup.exe
+    # and MSI, while macOS and Linux package the app root directly.
     if platform_tag == "windows":
         # Prefer the NSIS setup executable when present because it most closely
         # matches the end-user setup flow. Fall back to MSI if it is the only
@@ -254,6 +258,8 @@ def _main_app_score(path: Path, *, platform_tag: str, product_name: str) -> int:
         score += 15
     if normalized_stem in {"apprun", product_name.casefold()}:
         score += 30
+    # Push helper executables and the sidecar down so smoke launches the desktop
+    # shell, not a support binary from the bundle.
     if _looks_like_sidecar_name(path.name, platform_tag):
         score -= 500
     for helper_token in ("crashpad", "uninstall", "setup", "updater", "squirrel", "helper"):
@@ -365,6 +371,8 @@ def _probe_packaged_sidecar(
     platform_tag: str,
     env: dict[str, str],
 ) -> Path:
+    # Probe the bundled sidecar before launching the desktop app. Bundle wiring
+    # failures are easier to diagnose before the UI adds more moving parts.
     sidecar_path = _find_sidecar_binary(bundle_root, platform_tag=platform_tag)
     sidecar_cwd = sidecar_path.parent
 
@@ -2068,6 +2076,8 @@ def _validate_summary(
         raise SmokeError(f"Doctor checks failed in packaged smoke mode: {', '.join(failing_checks)}")
 
     data_root = doctor.get("dataRoot")
+    # Packaged smoke should prove the app can run from bundled data. Falling
+    # back to the checkout would hide release-only data-root failures.
     if isinstance(data_root, str) and data_root and not allow_repo_data_root:
         if _path_is_under(data_root, repo_root):
             raise SmokeError(
@@ -2307,6 +2317,8 @@ def main() -> int:
                 product_name=product_name,
                 env=env,
             )
+            # Windows smoke launches from the installed bundle root because the
+            # sidecar and app path under test are the real installer outputs.
             sidecar_bundle_root = windows_install_result.install_root
             installed_sidecar_paths = _find_sidecar_binaries(
                 sidecar_bundle_root,
@@ -2331,13 +2343,19 @@ def main() -> int:
                 platform_tag=platform_tag,
                 product_name=product_name,
             )
+            # macOS bundles carry the sidecar under the app root, so smoke keeps
+            # bundle discovery anchored there before launching the app binary.
             sidecar_bundle_root = artifact_path
             command = [str(app_executable)]
             launch_cwd = app_executable.parent
         else:
+            # AppImage smoke launches the artifact itself, but sidecar discovery
+            # still uses the bundle root after extraction.
             command = [str(artifact_path)]
             launch_cwd = artifact_path.parent
 
+        # Shape the environment explicitly so packaged smoke exercises bundled
+        # cache, temp, tool, stems, workspace, and summary paths in one run.
         env["MMO_CACHE_DIR"] = os.fspath(temp_root / "cache")
         env["MMO_TEMP_DIR"] = os.fspath(temp_root / "temp")
         env["MMO_DESKTOP_SMOKE_LAYOUT_STANDARD"] = args.layout_standard
@@ -2371,6 +2389,8 @@ def main() -> int:
         if not isinstance(summary, dict):
             raise SmokeError("Packaged desktop smoke summary was not a JSON object.")
 
+        # Treat malformed summary state, missing artifacts, and packaged
+        # data-root drift as hard failures. Smoke is the release truth check.
         render_truth = _validate_summary(
             summary=summary,
             repo_root=repo_root,
