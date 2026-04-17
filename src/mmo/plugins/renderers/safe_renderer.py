@@ -68,7 +68,9 @@ def _classify_rec(rec: Dict[str, Any]) -> str:
         # without approval. This audit renderer records that outcome; it does
         # not make a second policy decision here.
         return _REASON_AUTO_APPROVED
-    # Anything remaining (approval status unclear or risk unrecognised)
+    # Fail closed when recommendation policy metadata is incomplete or
+    # unfamiliar. This renderer records approval state; it must not infer a new
+    # permission from missing fields.
     return _REASON_REQUIRES_APPROVAL
 
 

@@ -117,15 +117,18 @@ Reason:
 
 See `docs/unknowns/bundled-plugin-review.md`.
 
-## Next pass
+## Follow-up status
 
-The highest-value follow-up is an approval-aware comment pass or trust-boundary
-audit on:
+The first two protected follow-ups now landed on this branch:
 
-- `src/mmo/core/plugin_loader.py`
-- `src/mmo/core/plugin_market.py`
-- critical shipped renderers such as `mixdown_renderer.py`,
+- loader and market authority notes in `src/mmo/core/plugin_loader.py` and
+  `src/mmo/core/plugin_market.py`
+- shipped renderer invariants in `mixdown_renderer.py`,
   `placement_mixdown_renderer.py`, and `safe_renderer.py`
+
+The next highest-value follow-up is the remaining approval-sensitive part of
+the slice:
+
 - approval-gated corrective behavior in `lfe_corrective_detector.py` and
   `lfe_corrective_resolver.py`
 - the subjective-pack bypass in `src/mmo/dsp/plugins/registry.py` and

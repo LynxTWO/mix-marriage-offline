@@ -2950,6 +2950,9 @@ class PlacementMixdownRenderer(RendererPlugin):
         outputs: list[dict[str, Any]] = []
         notes: list[str] = []
         stem_bus_by_id: dict[str, str] = {}
+        # Stereo is the audit anchor for later immersive layouts. Until a
+        # stereo master exists, decorrelation and similarity QA must stay
+        # dormant instead of guessing at a reference.
         stereo_master_path: Path | None = None
 
         for layout_id in selected_layouts:
@@ -3014,6 +3017,8 @@ class PlacementMixdownRenderer(RendererPlugin):
                 and isinstance(layout_master_path, Path)
                 and layout_master_path.exists()
             ):
+                # Hold onto the written stereo master path so later layout QA
+                # compares against the same artifact the operator can inspect.
                 stereo_master_path = layout_master_path
 
             plugin_meta = _bed_decorrelated_metadata(layout_master_row)
@@ -3109,6 +3114,8 @@ class PlacementMixdownRenderer(RendererPlugin):
                 _coerce_str(row.get("file_path")),
             )
         )
+        # Manifest output order is part of the review surface. Keep it stable so
+        # fallback-only changes do not look like unrelated artifact churn.
         manifest["outputs"] = outputs
         # Preserve degraded or collapsed outcomes in the manifest notes. Review
         # tools still need the final gate result even when files were written.

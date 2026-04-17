@@ -159,7 +159,46 @@ review. This pass does not edit application code.
   in `docs/unknowns/bundled-plugin-review.md` for later renderer,
   corrective-plugin, and subjective-pack follow-up work.
 
-## 5. Packaged smoke receipts and release workflow console output
+## 5. Bundled shipped-renderer comments (implemented on this branch)
+
+- Exact area and files:
+  `src/mmo/plugins/renderers/mixdown_renderer.py`,
+  `src/mmo/plugins/renderers/placement_mixdown_renderer.py`,
+  `src/mmo/plugins/renderers/safe_renderer.py`
+- Protected-area category:
+  shipped renderers on audio-changing and approval-audit paths
+- Why the risk matters:
+  these files define the baseline reference render, the scene-driven placement
+  render with stereo-reference QA, and the approval receipt renderer that
+  records recommendation disposition without writing audio
+- Current evidence:
+  `docs/review/bundled-plugin-review.md` identified these renderer files as the
+  next highest-value shipped implementation boundary after loader and market
+  authority notes. This batch stays comment-only and only clarifies existing
+  render and approval invariants.
+- Smallest safe edit after approval:
+  add comment-only notes that explain recommendation non-authority in baseline
+  mixdown, stereo-reference QA dependence in placement rendering, and the
+  safe renderer's fail-closed approval rule
+- What could break:
+  no runtime behavior should change. The real risk is stale or overstated
+  comments if the wording outruns the code.
+- Verification plan:
+  `tools/run_pytest.sh -q tests/test_mixdown_renderer_multiformat.py tests/test_placement_mixdown_renderer.py tests/test_corrective_plugins.py tests/test_cli_safe_render.py`,
+  `python3 tools/validate_contracts.py`,
+  and review of the comment text against `docs/review/bundled-renderer-comment-audit.md`
+- Rollback plan:
+  revert the new comments and related docs if later review finds they no longer
+  match the code or they imply broader slice closure than the repo supports
+- What human decision is required:
+  completed for this branch. Approval covered the next bundled-plugin comment
+  batch on the selected shipped renderer files.
+- Which unknowns still block the edit, if any:
+  no code blocker remained for these renderer files. Wider slice unknowns still
+  live in `docs/unknowns/bundled-plugin-review.md` for corrective plugins,
+  market parity, checkout examples, and the subjective-pack bypass.
+
+## 6. Packaged smoke receipts and release workflow console output
 
 - Exact area and files:
   `tools/smoke_packaged_desktop.py`,

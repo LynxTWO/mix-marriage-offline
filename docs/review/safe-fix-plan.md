@@ -10,6 +10,51 @@ small enough to review as docs-only work.
 
 ## Current protected-area batch
 
+## 5. Bundled shipped-renderer invariants
+
+- Exact files to change:
+  `src/mmo/plugins/renderers/mixdown_renderer.py`,
+  `src/mmo/plugins/renderers/placement_mixdown_renderer.py`,
+  `src/mmo/plugins/renderers/safe_renderer.py`,
+  `docs/review/safe-fix-plan.md`,
+  `docs/review/bundled-renderer-comment-audit.md`,
+  `docs/review/bundled-plugin-review.md`,
+  `docs/review/approval-packets.md`,
+  `docs/architecture/coverage-ledger.md`,
+  `docs/architecture/repo-slices.md`,
+  `docs/review/remediation-backlog.md`,
+  `docs/unknowns/critical-paths.md`
+- Why this change is safe now:
+  the user approved the next protected batch explicitly, the selected
+  renderer files already have read-only audit evidence, and this batch adds
+  comment-only notes without changing any DSP, QA, or approval logic
+- What behavior must remain unchanged:
+  baseline mixdown output behavior, placement render intent and fallback
+  behavior, stereo-reference QA behavior, safe-renderer classification rules,
+  manifest output ordering, and existing artifact contracts
+- Tests or checks to run:
+  `tools/run_pytest.sh -q tests/test_mixdown_renderer_multiformat.py tests/test_placement_mixdown_renderer.py tests/test_corrective_plugins.py tests/test_cli_safe_render.py`,
+  `python3 tools/validate_contracts.py`,
+  `npx --yes markdownlint-cli docs/review/safe-fix-plan.md docs/review/bundled-renderer-comment-audit.md docs/review/bundled-plugin-review.md docs/review/approval-packets.md docs/architecture/coverage-ledger.md docs/architecture/repo-slices.md docs/review/remediation-backlog.md docs/unknowns/critical-paths.md`,
+  and `git diff --check -- src/mmo/plugins/renderers/mixdown_renderer.py src/mmo/plugins/renderers/placement_mixdown_renderer.py src/mmo/plugins/renderers/safe_renderer.py docs/review/safe-fix-plan.md docs/review/bundled-renderer-comment-audit.md docs/review/bundled-plugin-review.md docs/review/approval-packets.md docs/architecture/coverage-ledger.md docs/architecture/repo-slices.md docs/review/remediation-backlog.md docs/unknowns/critical-paths.md`
+- Docs to update:
+  `docs/review/safe-fix-plan.md`,
+  `docs/review/bundled-renderer-comment-audit.md`,
+  `docs/review/bundled-plugin-review.md`,
+  `docs/review/approval-packets.md`,
+  `docs/architecture/coverage-ledger.md`,
+  `docs/architecture/repo-slices.md`,
+  `docs/review/remediation-backlog.md`,
+  `docs/unknowns/critical-paths.md`
+- Rollback note:
+  revert the new renderer comments and matching audit notes if later review
+  finds they no longer match the code or they imply broader slice closure than
+  the repo evidence supports
+- Observability note:
+  none; this batch does not change runtime output or telemetry
+- Change type:
+  comment-only
+
 ## 4. Bundled-plugin loader and market trust-boundary comments
 
 - Exact files to change:

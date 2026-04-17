@@ -121,13 +121,14 @@ Order rule:
   install assets, and subjective plugin behavior that bypasses the main loader
 - Blockers: checkout examples, offline market parity, and the subjective-pack
   bypass still need explicit authority notes beyond the loader and market files
+- Current progress note: loader and market authority notes, plus the first
+  shipped-renderer invariant comments, are now in place
 - Exit criteria for this stage: bundled manifests, packaged fallback manifests,
   shipped plugin implementation behavior, market-install asset boundaries, and
   the subjective-pack exception are explainable without guesswork
 - Next prompt to run: continue with a smaller approval-aware comment pass on
-  critical shipped renderers, approval-gated corrective plugins, and the
-  subjective-pack bypass now that loader and market authority notes are in
-  place
+  approval-gated corrective plugins and the subjective-pack bypass now that
+  loader, market, and first renderer authority notes are in place
 
 ## 7. Local dev shell and RPC bridge
 
