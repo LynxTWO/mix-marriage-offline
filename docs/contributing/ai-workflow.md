@@ -104,6 +104,7 @@ If you edit a path that already has anti-dark-code comments, check that the
 comments still match the code.
 
 - Update stale comments in the same change.
+- If a change removes or rewrites an anti-dark-code comment, replace it in the same change or state in the PR record why the old comment no longer applies.
 - Do not leave an old safety note behind after the code moved.
 
 ## Logging And Telemetry Drift

@@ -100,6 +100,8 @@ export class RpcProcessClient {
       if (lines.length === 0) {
         return;
       }
+      // Track only whether stderr existed and how much of it arrived. The GUI
+      // should not replay raw RPC stderr because failures often contain local paths.
       this._stderrPresent = true;
       this._stderrLineCount += lines.length;
     });
