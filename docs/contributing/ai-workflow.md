@@ -10,6 +10,8 @@ and tied to repo evidence.
 Review the current repo truth before a non-trivial change.
 
 - Read `AGENTS.md` first. `CLAUDE.md` and `GEMINI.md` defer to it.
+- Treat mirrored workspace copies such as `.claude/agents/` as convenience
+  copies, not authoritative review surfaces.
 - Read `docs/architecture/system-map.md` when the change touches runtime shape,
   trust boundaries, packaged data, support tools, release paths, or hidden
   entrypoints.
@@ -93,6 +95,8 @@ Do not let one clean path stand in for a whole slice.
   claiming the slice is closed.
 - Keep support tooling, release control planes, Pages deploy, and machine-readable
   outputs separate from the main runtime story when they change.
+- Keep mirrored workspace copies separate from canonical steering docs when a
+  summary, review, or comment pass names authoritative sources.
 
 ## Re-check Anti-Dark-Code Comments
 

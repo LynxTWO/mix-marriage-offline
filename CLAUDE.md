@@ -30,6 +30,10 @@ duplicating in `AGENTS.md`.
 Canonical Claude agent specs live in `docs/claude_agents/`.
 The local `.claude/agents/` directory is a synced workspace copy.
 
+Authority, edits, and review start from `AGENTS.md` and `docs/claude_agents/`.
+Do not treat `.claude/agents/` as a primary steering or coverage-review
+surface.
+
 Refresh it with:
 
 - `python tools/sync_claude_agents.py`
