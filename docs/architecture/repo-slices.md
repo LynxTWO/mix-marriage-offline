@@ -107,21 +107,26 @@ Order rule:
 ## 6. Bundled plugin implementations and packaged plugin data
 
 - Slice name: `Bundled plugin implementations and packaged plugin data`
-- Scope or repo paths: `plugins/`, `src/mmo/data/plugins/`, and remaining
-  bundled-plugin helpers under `src/mmo/plugins/`
-- Reason for the slice: bundled manifests and shipped implementations still
-  shape render and UI behavior through a second path beyond the shared
-  contracts already reviewed
+- Scope or repo paths: `plugins/`, `src/mmo/data/plugins/`,
+  `src/mmo/plugins/`, `src/mmo/data/plugin_market/assets/plugins/`,
+  `src/mmo/dsp/plugins/registry.py`, and `src/mmo/plugins/subjective/`
+- Reason for the slice: bundled manifests, packaged fallback manifests,
+  shipped implementation modules, offline market assets, and a subjective-pack
+  bypass still shape render and UI behavior through a second path beyond the
+  shared contracts already reviewed
 - Risk class: high
 - Classification label: `owned-risky`
 - Related runtime units or flows: bundled renderer and resolver behavior,
-  packaged plugin data, install-safe bundled fallback, and plugin behavior that
-  ships with the repo
-- Blockers: none currently recorded
-- Exit criteria for this stage: bundled manifests, packaged plugin data, and
-  shipped plugin implementation behavior are explainable without guesswork
-- Next prompt to run: read-only audit or comment pass focused on bundled plugin
-  implementations and packaged data
+  packaged fallback manifests, install-safe bundled fallback, offline market
+  install assets, and subjective plugin behavior that bypasses the main loader
+- Blockers: checkout examples, offline market parity, and the subjective-pack
+  bypass still need explicit authority notes
+- Exit criteria for this stage: bundled manifests, packaged fallback manifests,
+  shipped plugin implementation behavior, market-install asset boundaries, and
+  the subjective-pack exception are explainable without guesswork
+- Next prompt to run: approval-aware comment pass or trust-boundary audit
+  focused on plugin authority split, critical shipped renderers, approval-gated
+  corrective plugins, and the subjective-pack bypass
 
 ## 7. Local dev shell and RPC bridge
 
