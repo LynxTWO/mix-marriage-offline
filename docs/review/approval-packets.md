@@ -121,7 +121,45 @@ review. This pass does not edit application code.
   no strong repo-local blocker is recorded, but out-of-repo log consumers are
   still unproven
 
-## 4. Packaged smoke receipts and release workflow console output
+## 4. Bundled-plugin loader and market trust-boundary comments (implemented on this branch)
+
+- Exact area and files:
+  `src/mmo/core/plugin_loader.py`,
+  `src/mmo/core/plugin_market.py`
+- Protected-area category:
+  plugin loaders, execution boundaries, and marketplace install flow
+- Why the risk matters:
+  these files decide which plugin roots are authoritative, when bundled
+  fallback is allowed to contribute entries, how offline market installs resolve
+  source files, and where writable installs are allowed to land
+- Current evidence:
+  `docs/review/bundled-plugin-review.md` mapped the split across repo manifests,
+  packaged fallback manifests, shipped implementation modules, offline market
+  assets, and the subjective-pack bypass. This batch narrows to the two files
+  that define loader and market authority boundaries directly.
+- Smallest safe edit after approval:
+  add comment-only trust-boundary notes that explain root precedence, fallback
+  behavior, per-root validation, index-as-locator behavior, manifest authority,
+  and writable-target-only install scope
+- What could break:
+  no runtime behavior should change. The real risk is stale or overstated
+  comments if the wording outruns the code.
+- Verification plan:
+  `tools/run_pytest.sh -q tests/test_plugin_loader.py tests/test_plugin_market.py`,
+  `python3 tools/validate_contracts.py`,
+  and review of the comment text against `docs/review/bundled-plugin-trust-boundary-audit.md`
+- Rollback plan:
+  revert the new comments and related docs if later review finds they no longer
+  match the code or they overstate slice coverage
+- What human decision is required:
+  completed for this branch. Approval covered the first bundled-plugin comment
+  batch beginning with loader and market authority files.
+- Which unknowns still block the edit, if any:
+  no code blocker remained for these two files. Wider slice unknowns still live
+  in `docs/unknowns/bundled-plugin-review.md` for later renderer,
+  corrective-plugin, and subjective-pack follow-up work.
+
+## 5. Packaged smoke receipts and release workflow console output
 
 - Exact area and files:
   `tools/smoke_packaged_desktop.py`,

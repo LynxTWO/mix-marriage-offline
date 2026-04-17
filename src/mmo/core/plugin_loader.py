@@ -72,6 +72,10 @@ def resolve_plugin_roots(
         roots.append(primary)
 
     external, external_is_explicit = _resolved_external_plugin_dir(plugin_dir)
+    # Explicit external roots and the implicit per-user default are not the
+    # same trust signal. A missing explicit root means the operator asked for a
+    # specific plugin set, so falling through to bundled fallback would load
+    # the wrong authority surface.
     if external.exists() and not external.is_dir():
         raise ValueError(f"External plugin path is not a directory: {external.as_posix()}")
     if external.exists():
@@ -84,6 +88,8 @@ def resolve_plugin_roots(
 
     built_in = packaged_plugins_dir()
     if built_in is not None and built_in not in roots:
+        # Keep the bundled root in candidate order. Registration decides later
+        # whether it stays active fallback or gets dropped.
         roots.append(built_in)
 
     return tuple(roots)
@@ -128,7 +134,9 @@ def _validate_plugin_root(
     errors_by_path: dict[str, list[str]] = {}
 
     # Validate manifests before touching sys.path or importing entrypoints.
-    # A malformed external root should fail before any plugin code runs.
+    # Keep this boundary per root. A malformed earlier root should fail before
+    # code from that root runs, but later fallback roots are not pre-validated
+    # up front.
     for manifest_path in _collect_manifests(plugin_root):
         try:
             manifest = _load_yaml(manifest_path)
@@ -156,6 +164,9 @@ def _register_plugin_entries(
     registered: dict[str, PluginEntry] = {}
     source_by_id: dict[str, str] = {}
     built_in_source = built_in_root.as_posix() if built_in_root is not None else None
+    # Bundled fallback is a root-level decision, not a per-plugin merge. Once a
+    # repo or external root yields entries, packaged manifests stop
+    # contributing entries for this load.
     has_non_built_in_entries = any(
         entries and plugin_root.as_posix() != built_in_source
         for plugin_root, entries in loaded_by_root
@@ -174,6 +185,9 @@ def _register_plugin_entries(
                 if source == built_in_source:
                     # Keep earlier roots authoritative; packaged manifests are fallback.
                     continue
+                # Primary and external roots are peers. Shadowing here would
+                # hide split authority instead of forcing the operator to pick
+                # one plugin root.
                 raise ValueError(
                     "Duplicate plugin_id detected across plugin roots: "
                     f"{entry.plugin_id!r} in {existing_source} and {source}"
@@ -200,8 +214,9 @@ def load_registered_plugins(
     loaded_by_root: list[tuple[Path, list[PluginEntry]]] = []
 
     for plugin_root in roots:
-        # Validate each root before import so a bad earlier root cannot be masked
-        # by a later packaged fallback.
+        # Keep import trust scoped to one root at a time. Validate this root,
+        # then import this root. Do not assume later fallback roots were
+        # checked before earlier plugin code runs.
         _validate_plugin_root(plugin_root)
         with _plugin_import_paths(plugin_root):
             loaded_by_root.append((plugin_root, _load_plugins_from_dir(plugin_root)))

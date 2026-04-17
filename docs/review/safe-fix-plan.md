@@ -10,6 +10,48 @@ small enough to review as docs-only work.
 
 ## Current protected-area batch
 
+## 4. Bundled-plugin loader and market trust-boundary comments
+
+- Exact files to change:
+  `src/mmo/core/plugin_loader.py`,
+  `src/mmo/core/plugin_market.py`,
+  `docs/review/safe-fix-plan.md`,
+  `docs/review/bundled-plugin-trust-boundary-audit.md`,
+  `docs/review/approval-packets.md`,
+  `docs/architecture/coverage-ledger.md`,
+  `docs/architecture/repo-slices.md`,
+  `docs/review/remediation-backlog.md`,
+  `docs/unknowns/critical-paths.md`
+- Why this change is safe now:
+  the user approved this protected comment batch explicitly, the selected
+  functions already have read-only audit evidence, and the batch only adds
+  explanatory comments plus matching audit notes
+- What behavior must remain unchanged:
+  plugin root precedence, bundled fallback behavior, per-root validation order,
+  duplicate-ID failure behavior, market source resolution, manifest authority
+  before install, writable install target selection, and idempotent reinstall
+  semantics
+- Tests or checks to run:
+  `tools/run_pytest.sh -q tests/test_plugin_loader.py tests/test_plugin_market.py`,
+  `python3 tools/validate_contracts.py`,
+  `npx --yes markdownlint-cli docs/review/safe-fix-plan.md docs/review/bundled-plugin-trust-boundary-audit.md docs/review/approval-packets.md docs/architecture/coverage-ledger.md docs/architecture/repo-slices.md docs/review/remediation-backlog.md docs/unknowns/critical-paths.md`,
+  and `git diff --check -- src/mmo/core/plugin_loader.py src/mmo/core/plugin_market.py docs/review/safe-fix-plan.md docs/review/bundled-plugin-trust-boundary-audit.md docs/review/approval-packets.md docs/architecture/coverage-ledger.md docs/architecture/repo-slices.md docs/review/remediation-backlog.md docs/unknowns/critical-paths.md`
+- Docs to update:
+  `docs/review/safe-fix-plan.md`,
+  `docs/review/bundled-plugin-trust-boundary-audit.md`,
+  `docs/review/approval-packets.md`,
+  `docs/architecture/coverage-ledger.md`,
+  `docs/architecture/repo-slices.md`,
+  `docs/review/remediation-backlog.md`,
+  `docs/unknowns/critical-paths.md`
+- Rollback note:
+  revert the new comments and audit notes if later review finds any comment
+  overstated the authority boundary or no longer matches the code
+- Observability note:
+  none; this batch does not change runtime output or telemetry
+- Change type:
+  comment-only
+
 ## 3. GUI stderr redaction in the local dev-shell bridge
 
 - Exact files to change:

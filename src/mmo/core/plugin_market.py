@@ -156,6 +156,8 @@ def _relative_path_without_plugins_prefix(path_text: str, *, field_name: str) ->
     parts = candidate.parts
     if len(parts) < 2 or parts[0] != "plugins":
         raise ValueError(f"{field_name} must begin with 'plugins/': {path_text}")
+    # Market installs only copy plugin-relative files. Rejecting any other
+    # prefix keeps the offline index from naming arbitrary data files.
     return Path(*parts[1:])
 
 
@@ -350,6 +352,9 @@ def _resolve_install_source_path(
     source_path_raw = market_index.get("source_path")
     if isinstance(source_path_raw, str) and source_path_raw.strip():
         source_path = Path(source_path_raw).resolve()
+        # An explicit index path is trusted operator input. Keep extra probes
+        # anchored to that index instead of widening install lookup to
+        # arbitrary absolute paths.
         # The index may live beside the install assets or inside a generated
         # snapshot tree. Probe both relative locations without widening beyond
         # the repo-managed data roots above.
@@ -447,6 +452,8 @@ def _is_entry_installable(
             market_index=market_index,
             relative_path=Path("plugins") / module_rel,
         )
+        # "Installable" only means the market can resolve a manifest and module
+        # from trusted roots. It does not confirm runtime import or semantics.
         return True
     except (RuntimeError, ValueError):
         return False
@@ -475,6 +482,9 @@ def build_plugin_market_list_payload(
         plugin_id = str(entry.get("plugin_id", ""))
         is_installed = plugin_id in installed_ids
         row = dict(entry)
+        # "Installed" comes from active plugin-root scanning. "Installable"
+        # comes from market-asset resolution. A repo checkout plugin can be
+        # installed already without ever being copied from the market index.
         row["install_state"] = "installed" if is_installed else "available"
         row["installed"] = is_installed
         row["installable"] = _is_entry_installable(
@@ -543,6 +553,8 @@ def install_plugin_market_entry(
         market_index=market_index,
         relative_path=Path("plugins") / manifest_rel,
     )
+    # The index only points at a candidate manifest. The file on disk is the
+    # authority before anything is copied into a writable plugin root.
     manifest_payload = _load_yaml_object(
         source_manifest,
         label=f"Plugin install manifest for {normalized_plugin_id}",
