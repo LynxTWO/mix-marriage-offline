@@ -47,7 +47,7 @@ review. This pass does not edit application code.
   `docs/unknowns/remediation-pass.md` still records missing proof about which
   shared channels capture or forbid these outputs
 
-## 2. GUI stderr forwarding
+## 2. GUI stderr forwarding (implemented on this branch)
 
 - Exact area and files:
   `gui/lib/mmo_cli_runner.mjs`,
@@ -55,17 +55,19 @@ review. This pass does not edit application code.
 - Protected-area category:
   GUI RPC and local subprocess bridge
 - Why the risk matters:
-  both helpers forward raw subprocess stderr into browser-visible errors. A
-  failing CLI or RPC call can include project paths, artifact paths, and other
-  machine-local context.
+  before this branch, both helpers forwarded raw subprocess stderr into
+  browser-visible errors. A failing CLI or RPC call can include project paths,
+  artifact paths, and other machine-local context.
 - Current evidence:
-  `docs/security/logging-audit.md` marked both helpers as conditional leaks in
-  protected GUI bridge paths. The backlog and logging unknowns still treat this
-  as approval-gated, not soft evidence.
+  `docs/security/logging-audit.md` originally marked both helpers as
+  conditional leaks in protected GUI bridge paths. The current branch now uses
+  allowlisted summaries with public candidate labels, exit or error metadata,
+  and `stderr_present` or `stderr_lines` counts. `cd gui && npm test` covers
+  the new contract in `gui/tests/mmo_cli_runner.test.mjs` and
+  `gui/tests/rpc_process_client.test.mjs`.
 - Smallest safe edit after approval:
-  replace raw stderr forwarding with an allowlisted summary such as exit code,
-  candidate label, `stderr_present`, and bounded line count or first-line
-  status
+  completed on this branch by replacing raw stderr forwarding with allowlisted
+  summary fields and basename-only candidate labels
 - What could break:
   tests or local debugging flows that currently assert or rely on the full
   stderr text
@@ -73,17 +75,16 @@ review. This pass does not edit application code.
   `cd gui && npm test`, with attention to
   `gui/tests/mmo_cli_runner.test.mjs` and
   `gui/tests/rpc_process_client.test.mjs`, plus one manual failing dev-shell
-  path
+  path to confirm the browser surface still shows only the allowlisted summary
 - Rollback plan:
   revert the allowlist change and restore raw stderr forwarding if the new
   summary shape breaks the intended GUI failure flow
 - What human decision is required:
-  approve narrowing the surfaced error contract in the local GUI and deciding
-  whether any richer detail should survive behind an explicit local-debug path
+  completed for this branch. The approved direction was to narrow the surfaced
+  error contract in the local GUI without adding a separate raw-stderr bypass.
 - Which unknowns still block the edit, if any:
-  `docs/unknowns/logging-audit.md` still notes that the worst-case stderr
-  payload depends on runtime failures, but that does not block a redaction
-  direction
+  no code blocker remains. `docs/unknowns/logging-audit.md` keeps a runtime
+  spot-check note for one failing dev-shell path.
 
 ## 3. Render live-progress path output
 

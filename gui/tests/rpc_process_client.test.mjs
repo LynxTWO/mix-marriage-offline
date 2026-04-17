@@ -96,6 +96,38 @@ function _fakeRpcChild() {
   return child;
 }
 
+function _fakeFailingRpcChild({ code = 2, signal = null, stderrLines = [] } = {}) {
+  const child = new EventEmitter();
+  const stdout = new PassThrough();
+  const stderr = new PassThrough();
+
+  const stdin = new Writable({
+    write(_chunk, _encoding, callback) {
+      callback();
+    },
+  });
+
+  child.stdout = stdout;
+  child.stderr = stderr;
+  child.stdin = stdin;
+  child.kill = () => {
+    process.nextTick(() => {
+      child.emit("close", 0, null);
+    });
+  };
+
+  process.nextTick(() => {
+    for (const line of stderrLines) {
+      stderr.write(`${line}\n`);
+    }
+    stdout.end();
+    stderr.end();
+    child.emit("close", code, signal);
+  });
+
+  return child;
+}
+
 function _fakeSpawn() {
   return (command) => {
     if (command === "missing-command") {
@@ -108,6 +140,12 @@ function _fakeSpawn() {
     }
     return _fakeRpcChild();
   };
+}
+
+function _fakeFailingSpawn() {
+  return () => _fakeFailingRpcChild({
+    stderrLines: ["/tmp/private/project/render_report.json failed"],
+  });
 }
 
 async function _testRpcProcessClientStartsAndHandlesRequests() {
@@ -137,6 +175,40 @@ async function _testRpcProcessClientStartsAndHandlesRequests() {
   }
 }
 
+async function _testRpcProcessClientStartupErrorRedactsStderrTail() {
+  const client = new RpcProcessClient({
+    startupTimeoutMs: 500,
+    spawnProcess: _fakeFailingSpawn(),
+    candidates: [
+      _candidate("/tmp/private/bin/mmo", "/tmp/private/bin/mmo gui rpc"),
+      _candidate("C:\\private\\python.exe", "C:\\private\\python.exe -m mmo gui rpc"),
+    ],
+  });
+
+  let raised = null;
+  try {
+    await client.start();
+  } catch (error) {
+    raised = error;
+  } finally {
+    await client.stop();
+  }
+
+  assert.ok(raised instanceof Error);
+  assert.match(
+    raised.message,
+    /mmo gui rpc: RPC process exited \(mmo gui rpc\), code=2, signal=null, stderr_present=true, stderr_lines=1/,
+  );
+  assert.match(
+    raised.message,
+    /python\.exe -m mmo gui rpc: RPC process exited \(python\.exe -m mmo gui rpc\), code=2, signal=null, stderr_present=true, stderr_lines=1/,
+  );
+  assert.equal(raised.message.includes("/tmp/private/bin/mmo gui rpc"), false);
+  assert.equal(raised.message.includes("/tmp/private/project/render_report.json failed"), false);
+  assert.equal(raised.message.includes("C:\\private\\python.exe -m mmo gui rpc"), false);
+}
+
 export async function run() {
   await _testRpcProcessClientStartsAndHandlesRequests();
+  await _testRpcProcessClientStartupErrorRedactsStderrTail();
 }

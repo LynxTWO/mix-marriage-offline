@@ -106,8 +106,40 @@ async function _testRunMmoCliFailureSummaryIncludesPythonFallbackLabel() {
     raised = error;
   }
   assert.ok(raised instanceof Error);
-  assert.match(raised.message, /mmo: code=2; stderr=mmo failed/);
-  assert.match(raised.message, /python -m mmo: code=4; stderr=python fallback failed/);
+  assert.match(raised.message, /mmo: code=2; stderr_present=true; stderr_lines=1/);
+  assert.match(raised.message, /python -m mmo: code=4; stderr_present=true; stderr_lines=1/);
+  assert.equal(raised.message.includes("mmo failed"), false);
+  assert.equal(raised.message.includes("python fallback failed"), false);
+}
+
+async function _testRunMmoCliFailureSummaryRedactsPathLikeLabels() {
+  const spawnProcess = _fakeSpawnFactory([
+    { code: 2, stderr: "/tmp/private/project/render_report.json failed" },
+    { code: 4, stderr: "C:\\Users\\private\\project\\render_report.json failed" },
+  ]);
+  const candidates = [
+    _candidate({ label: "/tmp/private/bin/mmo" }),
+    _candidate({ label: "C:\\private\\python.exe -m mmo" }),
+  ];
+
+  let raised = null;
+  try {
+    await runMmoCli([], {
+      candidates,
+      acceptedExitCodes: [0],
+      timeoutMs: 5_000,
+      spawnProcess,
+    });
+  } catch (error) {
+    raised = error;
+  }
+  assert.ok(raised instanceof Error);
+  assert.match(raised.message, /mmo: code=2; stderr_present=true; stderr_lines=1/);
+  assert.match(raised.message, /python\.exe -m mmo: code=4; stderr_present=true; stderr_lines=1/);
+  assert.equal(raised.message.includes("/tmp/private/bin/mmo"), false);
+  assert.equal(raised.message.includes("/tmp/private/project/render_report.json failed"), false);
+  assert.equal(raised.message.includes("C:\\private\\python.exe -m mmo"), false);
+  assert.equal(raised.message.includes("C:\\Users\\private\\project\\render_report.json failed"), false);
 }
 
 function _fakeChild({ code = 0, stdout = "", stderr = "" } = {}) {
@@ -152,4 +184,5 @@ export async function run() {
   _testBuildCliCandidatesKeepsPythonModuleFallback();
   await _testRunMmoCliFailureSummaryListsFallbackCandidates();
   await _testRunMmoCliFailureSummaryIncludesPythonFallbackLabel();
+  await _testRunMmoCliFailureSummaryRedactsPathLikeLabels();
 }

@@ -8,6 +8,45 @@ This plan covers the first safe remediation batch from
 It only includes items that are clearly evidenced, not approval-gated, and
 small enough to review as docs-only work.
 
+## Current protected-area batch
+
+## 3. GUI stderr redaction in the local dev-shell bridge
+
+- Exact files to change:
+  `gui/lib/mmo_cli_runner.mjs`,
+  `gui/lib/rpc_process_client.mjs`,
+  `gui/tests/mmo_cli_runner.test.mjs`,
+  `gui/tests/rpc_process_client.test.mjs`,
+  `docs/review/safe-fix-plan.md`,
+  `docs/architecture/coverage-ledger.md`,
+  `docs/security/logging-audit.md`,
+  `docs/unknowns/logging-audit.md`
+- Why this change is safe now:
+  the approval packet is already written, the risky surface is narrow, and the
+  change only replaces raw stderr and path-rich candidate labels with a short
+  allowlist summary
+- What behavior must remain unchanged:
+  CLI fallback order, RPC startup and request flow, browser-visible failure
+  detection, local dev-shell routing, and the existing success-path JSON
+  contracts
+- Tests or checks to run:
+  `cd gui && npm test`,
+  `npx --yes markdownlint-cli docs/review/safe-fix-plan.md docs/architecture/coverage-ledger.md docs/security/logging-audit.md docs/unknowns/logging-audit.md`,
+  `git diff --check -- gui/lib/mmo_cli_runner.mjs gui/lib/rpc_process_client.mjs gui/tests/mmo_cli_runner.test.mjs gui/tests/rpc_process_client.test.mjs docs/review/safe-fix-plan.md docs/architecture/coverage-ledger.md docs/security/logging-audit.md docs/unknowns/logging-audit.md`
+- Docs to update:
+  `docs/review/safe-fix-plan.md`,
+  `docs/architecture/coverage-ledger.md`,
+  `docs/security/logging-audit.md`,
+  `docs/unknowns/logging-audit.md`
+- Rollback note:
+  revert the summary-only error contract if the GUI bridge loses required local
+  debugging signal or the test suite proves callers still rely on raw stderr
+- Observability note:
+  this is a redaction change on a logging-sensitive bridge. Recheck the local
+  GUI slice in the logging audit after the edit so the docs match the code.
+- Change type:
+  behavior-preserving code cleanup
+
 ## 1. Dedicated bundled-plugin follow-up slice
 
 - Exact files to change:
