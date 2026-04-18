@@ -10,6 +10,53 @@ small enough to review as docs-only work.
 
 ## Current protected-area batch
 
+## 7. Bundled subjective-bypass trust boundary
+
+- Exact files to change:
+  `src/mmo/dsp/plugins/registry.py`,
+  `src/mmo/plugins/subjective/__init__.py`,
+  `src/mmo/plugins/subjective/binaural_preview_v0.py`,
+  `docs/review/safe-fix-plan.md`,
+  `docs/review/bundled-subjective-bypass-audit.md`,
+  `docs/review/bundled-plugin-review.md`,
+  `docs/review/approval-packets.md`,
+  `docs/architecture/coverage-ledger.md`,
+  `docs/architecture/repo-slices.md`,
+  `docs/review/remediation-backlog.md`,
+  `docs/unknowns/bundled-plugin-review.md`,
+  `docs/unknowns/critical-paths.md`
+- Why this change is safe now:
+  the user approved the next protected bundled-plugin batch explicitly, the
+  selected subjective-bypass files already have read-only review evidence, and
+  this batch adds comment-only notes without changing plugin IDs, render flow,
+  or manifest-loader behavior
+- What behavior must remain unchanged:
+  subjective plugin registry IDs and order, binaural preview selection,
+  headphone preview render behavior, preview metadata shape, and the existing
+  separation between manifest-loaded plugins and the DSP-side subjective pack
+- Tests or checks to run:
+  `tools/run_pytest.sh -q tests/test_subjective_plugins.py tests/test_subjective_binaural_preview.py tests/test_cli_safe_render.py -k binaural`,
+  `python3 tools/validate_contracts.py`,
+  `npx --yes markdownlint-cli docs/review/safe-fix-plan.md docs/review/bundled-subjective-bypass-audit.md docs/review/bundled-plugin-review.md docs/review/approval-packets.md docs/architecture/coverage-ledger.md docs/architecture/repo-slices.md docs/review/remediation-backlog.md docs/unknowns/bundled-plugin-review.md docs/unknowns/critical-paths.md`,
+  and `git diff --check -- src/mmo/dsp/plugins/registry.py src/mmo/plugins/subjective/__init__.py src/mmo/plugins/subjective/binaural_preview_v0.py docs/review/safe-fix-plan.md docs/review/bundled-subjective-bypass-audit.md docs/review/bundled-plugin-review.md docs/review/approval-packets.md docs/architecture/coverage-ledger.md docs/architecture/repo-slices.md docs/review/remediation-backlog.md docs/unknowns/bundled-plugin-review.md docs/unknowns/critical-paths.md`
+- Docs to update:
+  `docs/review/safe-fix-plan.md`,
+  `docs/review/bundled-subjective-bypass-audit.md`,
+  `docs/review/bundled-plugin-review.md`,
+  `docs/review/approval-packets.md`,
+  `docs/architecture/coverage-ledger.md`,
+  `docs/architecture/repo-slices.md`,
+  `docs/review/remediation-backlog.md`,
+  `docs/unknowns/bundled-plugin-review.md`,
+  `docs/unknowns/critical-paths.md`
+- Rollback note:
+  revert the new subjective-bypass comments and matching audit notes if later
+  review finds they no longer match the code or they overstate slice closure
+- Observability note:
+  none; this batch does not change runtime output or telemetry
+- Change type:
+  comment-only
+
 ## 6. Bundled corrective detector and resolver boundaries
 
 - Exact files to change:

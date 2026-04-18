@@ -241,7 +241,50 @@ review. This pass does not edit application code.
   in `docs/unknowns/bundled-plugin-review.md` for the subjective-pack bypass,
   checkout examples, and offline market parity.
 
-## 7. Packaged smoke receipts and release workflow console output
+## 7. Bundled subjective-bypass comments (implemented on this branch)
+
+- Exact area and files:
+  `src/mmo/dsp/plugins/registry.py`,
+  `src/mmo/plugins/subjective/__init__.py`,
+  `src/mmo/plugins/subjective/binaural_preview_v0.py`
+- Protected-area category:
+  shipped plugin authority exception on a DSP and render-target path
+- Why the risk matters:
+  these files make the subjective pack first-class shipped behavior even though
+  it does not flow through the manifest loader, bundled fallback manifests, or
+  offline market install roots
+- Current evidence:
+  `docs/review/bundled-plugin-review.md` left the subjective pack as the last
+  missing trust-boundary note inside the bundled-plugin slice. The registry
+  tests, binaural preview tests, and CLI binaural checks already prove that
+  this path resolves from the DSP registry and is called directly by the
+  binaural target flow.
+- Smallest safe edit after approval:
+  add comment-only notes that explain the DSP-side allowlist in
+  `registry.py`, restate the shipped exception in `subjective/__init__.py`, and
+  document the direct preview-module call path in
+  `binaural_preview_v0.py`
+- What could break:
+  no runtime behavior should change. The real risk is stale or overstated
+  comments if the wording implies broader closure than the remaining evidence
+  supports.
+- Verification plan:
+  `tools/run_pytest.sh -q tests/test_subjective_plugins.py tests/test_subjective_binaural_preview.py tests/test_cli_safe_render.py -k binaural`,
+  `python3 tools/validate_contracts.py`,
+  and review of the comment text against
+  `docs/review/bundled-subjective-bypass-audit.md`
+- Rollback plan:
+  revert the new comments and related docs if later review finds they no longer
+  match the code or they overstate bundled-plugin closure
+- What human decision is required:
+  completed for this branch. Approval covered the next bundled-plugin comment
+  batch on the selected subjective-bypass files.
+- Which unknowns still block the edit, if any:
+  no code blocker remained for these files. Wider bundled-plugin evidence gaps
+  still live in `docs/unknowns/bundled-plugin-review.md` for checkout examples
+  and offline market parity.
+
+## 8. Packaged smoke receipts and release workflow console output
 
 - Exact area and files:
   `tools/smoke_packaged_desktop.py`,

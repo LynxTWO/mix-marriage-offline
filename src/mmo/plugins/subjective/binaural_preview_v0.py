@@ -716,6 +716,9 @@ def render_headphone_preview_wav(
         raise ValueError("WAV sample stream is not frame-aligned.")
     multichannel = samples.reshape(-1, channel_count).T
 
+    # Headphone preview is the shipped subjective-pack exception. The binaural
+    # target calls this implementation directly instead of resolving a plugin
+    # manifest through the main loader.
     plugin = BinauralPreviewV0Plugin()
     evidence = PluginContext(
         precision_mode="float64",
@@ -775,6 +778,9 @@ def build_headphone_preview_manifest(
     outputs: list[dict[str, Any]] = []
     skipped: list[dict[str, Any]] = []
 
+    # The manifest helper only derives preview deliverables from renderer
+    # outputs. It does not reopen plugin authority; the preview implementation
+    # remains the fixed shipped module above.
     for manifest in renderer_manifests:
         if not isinstance(manifest, dict):
             continue

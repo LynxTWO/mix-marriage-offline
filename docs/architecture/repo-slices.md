@@ -119,17 +119,19 @@ Order rule:
 - Related runtime units or flows: bundled renderer and resolver behavior,
   packaged fallback manifests, install-safe bundled fallback, offline market
   install assets, and subjective plugin behavior that bypasses the main loader
-- Blockers: checkout examples, offline market parity, and the subjective-pack
-  bypass still need explicit authority notes beyond the loader and market files
+- Blockers: checkout examples and offline market parity still need clearer
+  evidence if the repo wants stronger bundled-plugin closure than the current
+  comment coverage
 - Current progress note: loader and market authority notes, the first
-  shipped-renderer invariant comments, and the corrective approval notes are
-  now in place
+  shipped-renderer invariant comments, the corrective approval notes, and the
+  subjective-bypass notes are now in place
 - Exit criteria for this stage: bundled manifests, packaged fallback manifests,
   shipped plugin implementation behavior, market-install asset boundaries, and
   the subjective-pack exception are explainable without guesswork
-- Next prompt to run: continue with a smaller approval-aware trust-boundary
-  pass on the subjective-pack bypass now that loader, market, first renderer,
-  and corrective approval notes are in place
+- Next prompt to run: no immediate protected comment batch remains. If more
+  bundled-plugin certainty is needed, run a bounded evidence pass on checkout
+  examples or offline market parity. Otherwise move to the next risk-ranked
+  slice.
 
 ## 7. Local dev shell and RPC bridge
 

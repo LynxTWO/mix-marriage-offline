@@ -95,17 +95,6 @@ without going through the main manifest loader.
 That is shipped plugin-like behavior, but it sits outside the bundled manifest
 roots that earlier slice wording implied.
 
-## Coverage decision
-
-Move the bundled-plugin slice from `deferred` to `mapped`.
-
-Reason:
-
-- the slice is no longer a vague follow-up
-- the authority split and main trust boundaries are now identified with repo
-  evidence
-- the slice is still not explained well enough to call it `commented`
-
 ## What remains unclear
 
 - whether `plugins/examples/*` should stay runtime-discoverable in a repo
@@ -119,7 +108,7 @@ See `docs/unknowns/bundled-plugin-review.md`.
 
 ## Follow-up status
 
-The first three protected follow-ups now landed on this branch:
+The protected bundled-plugin comment batches now landed on this branch:
 
 - loader and market authority notes in `src/mmo/core/plugin_loader.py` and
   `src/mmo/core/plugin_market.py`
@@ -127,12 +116,15 @@ The first three protected follow-ups now landed on this branch:
   `placement_mixdown_renderer.py`, and `safe_renderer.py`
 - corrective approval boundaries in `lfe_corrective_detector.py` and
   `lfe_corrective_resolver.py`
-
-The next highest-value follow-up is the remaining approval-sensitive part of
-the slice:
-
-- the subjective-pack bypass in `src/mmo/dsp/plugins/registry.py` and
+- subjective bypass notes in `src/mmo/dsp/plugins/registry.py` and
   `src/mmo/plugins/subjective/`
 
-Checkout-example visibility and offline market parity still remain evidence
-gaps recorded in `docs/unknowns/bundled-plugin-review.md`.
+That leaves the bundled-plugin slice with two evidence gaps rather than a
+missing protected comment batch:
+
+- checkout-example visibility under `plugins/examples/*`
+- offline market parity between
+  `src/mmo/data/plugin_market/assets/plugins/*` and `src/mmo/plugins/*`
+
+Those remaining questions stay recorded in
+`docs/unknowns/bundled-plugin-review.md`.
