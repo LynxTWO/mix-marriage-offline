@@ -10,6 +10,51 @@ small enough to review as docs-only work.
 
 ## Current protected-area batch
 
+## 6. Bundled corrective detector and resolver boundaries
+
+- Exact files to change:
+  `src/mmo/plugins/detectors/lfe_corrective_detector.py`,
+  `src/mmo/plugins/resolvers/lfe_corrective_resolver.py`,
+  `docs/review/safe-fix-plan.md`,
+  `docs/review/bundled-corrective-plugin-audit.md`,
+  `docs/review/bundled-plugin-review.md`,
+  `docs/review/approval-packets.md`,
+  `docs/architecture/coverage-ledger.md`,
+  `docs/architecture/repo-slices.md`,
+  `docs/review/remediation-backlog.md`,
+  `docs/unknowns/critical-paths.md`
+- Why this change is safe now:
+  the user approved the next protected bundled-plugin batch explicitly, the
+  selected detector and resolver files already have read-only review evidence,
+  and this batch adds comment-only notes without changing detection thresholds,
+  recommendation payloads, or approval flow
+- What behavior must remain unchanged:
+  `ISSUE.LFE.*` detection thresholds, emitted issue IDs, corrective filter
+  payload choices, `requires_approval` semantics, explicit-LFE no-silent-reroute
+  behavior, and safe-render QA rerun behavior after an approved filter
+- Tests or checks to run:
+  `tools/run_pytest.sh -q tests/test_corrective_plugins.py tests/test_lfe_corrective_approval.py`,
+  `python3 tools/validate_contracts.py`,
+  `npx --yes markdownlint-cli docs/review/safe-fix-plan.md docs/review/bundled-corrective-plugin-audit.md docs/review/bundled-plugin-review.md docs/review/approval-packets.md docs/architecture/coverage-ledger.md docs/architecture/repo-slices.md docs/review/remediation-backlog.md docs/unknowns/critical-paths.md`,
+  and `git diff --check -- src/mmo/plugins/detectors/lfe_corrective_detector.py src/mmo/plugins/resolvers/lfe_corrective_resolver.py docs/review/safe-fix-plan.md docs/review/bundled-corrective-plugin-audit.md docs/review/bundled-plugin-review.md docs/review/approval-packets.md docs/architecture/coverage-ledger.md docs/architecture/repo-slices.md docs/review/remediation-backlog.md docs/unknowns/critical-paths.md`
+- Docs to update:
+  `docs/review/safe-fix-plan.md`,
+  `docs/review/bundled-corrective-plugin-audit.md`,
+  `docs/review/bundled-plugin-review.md`,
+  `docs/review/approval-packets.md`,
+  `docs/architecture/coverage-ledger.md`,
+  `docs/architecture/repo-slices.md`,
+  `docs/review/remediation-backlog.md`,
+  `docs/unknowns/critical-paths.md`
+- Rollback note:
+  revert the new corrective-plugin comments and matching audit notes if later
+  review finds they no longer match the code or they imply that approval or QA
+  safeguards moved
+- Observability note:
+  none; this batch does not change runtime output or telemetry
+- Change type:
+  comment-only
+
 ## 5. Bundled shipped-renderer invariants
 
 - Exact files to change:

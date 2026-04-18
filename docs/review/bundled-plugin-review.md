@@ -119,17 +119,20 @@ See `docs/unknowns/bundled-plugin-review.md`.
 
 ## Follow-up status
 
-The first two protected follow-ups now landed on this branch:
+The first three protected follow-ups now landed on this branch:
 
 - loader and market authority notes in `src/mmo/core/plugin_loader.py` and
   `src/mmo/core/plugin_market.py`
 - shipped renderer invariants in `mixdown_renderer.py`,
   `placement_mixdown_renderer.py`, and `safe_renderer.py`
+- corrective approval boundaries in `lfe_corrective_detector.py` and
+  `lfe_corrective_resolver.py`
 
 The next highest-value follow-up is the remaining approval-sensitive part of
 the slice:
 
-- approval-gated corrective behavior in `lfe_corrective_detector.py` and
-  `lfe_corrective_resolver.py`
 - the subjective-pack bypass in `src/mmo/dsp/plugins/registry.py` and
   `src/mmo/plugins/subjective/`
+
+Checkout-example visibility and offline market parity still remain evidence
+gaps recorded in `docs/unknowns/bundled-plugin-review.md`.

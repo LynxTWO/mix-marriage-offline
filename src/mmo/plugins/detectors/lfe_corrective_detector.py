@@ -122,13 +122,22 @@ class LfeCorrectiveDetector(DetectorPlugin):
                 continue
             measurements = _measurement_index(stem)
             channel_rows = _channel_rows(measurements)
+            # This detector stays on the explicit-LFE audit lane. It does not
+            # invent a corrective path for stems that neither declare LFE
+            # routing nor carry LFE audit evidence.
             if (
                 not stem_has_explicit_lfe(stem)
                 and not any(key.startswith("EVID.LFE.") for key in measurements)
             ):
                 continue
 
+            # Carry the measured artifact context through every issue so later
+            # approval and render receipts still point back to the audited
+            # stem, file path, and channel-row evidence.
             base_evidence = _base_evidence(stem=stem, measurements=measurements)
+            # One explicit LFE stem can trip more than one threshold. The
+            # detector reports each threshold crossing, but it does not choose
+            # which corrective action, if any, is acceptable.
 
             out_of_band_db = _row_max_metric(channel_rows, "out_of_band_energy_db")
             if out_of_band_db is not None and out_of_band_db > _OUT_OF_BAND_THRESHOLD_DB:

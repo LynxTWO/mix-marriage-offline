@@ -198,7 +198,50 @@ review. This pass does not edit application code.
   live in `docs/unknowns/bundled-plugin-review.md` for corrective plugins,
   market parity, checkout examples, and the subjective-pack bypass.
 
-## 6. Packaged smoke receipts and release workflow console output
+## 6. Bundled corrective detector and resolver comments (implemented on this branch)
+
+- Exact area and files:
+  `src/mmo/plugins/detectors/lfe_corrective_detector.py`,
+  `src/mmo/plugins/resolvers/lfe_corrective_resolver.py`
+- Protected-area category:
+  approval-gated bundled plugin detectors and resolvers on an audio-changing
+  corrective path
+- Why the risk matters:
+  these files decide when the repo emits `ISSUE.LFE.*` findings, which
+  corrective filter candidates are described, and how the later safe-render
+  flow records approval, rollback, and explicit-LFE no-silent-reroute notes
+- Current evidence:
+  `docs/review/bundled-plugin-review.md` and
+  `docs/review/bundled-renderer-comment-audit.md` left the corrective detector
+  and resolver pair as the next approval-sensitive boundary inside the bundled
+  plugin slice. This batch stays comment-only and only clarifies the evidence
+  scope, approval requirement, and non-executory resolver role already present
+  in code and tests.
+- Smallest safe edit after approval:
+  add comment-only notes that explain explicit-LFE gating in the detector,
+  additive issue emission, approval-only resolver output, and unchanged
+  evidence carry-through into receipts
+- What could break:
+  no runtime behavior should change. The real risk is stale or overstated
+  comments if the wording outruns the code or suggests that approval became
+  optional.
+- Verification plan:
+  `tools/run_pytest.sh -q tests/test_corrective_plugins.py tests/test_lfe_corrective_approval.py`,
+  `python3 tools/validate_contracts.py`,
+  and review of the comment text against
+  `docs/review/bundled-corrective-plugin-audit.md`
+- Rollback plan:
+  revert the new comments and related docs if later review finds they no longer
+  match the code or they imply broader slice closure than the repo supports
+- What human decision is required:
+  completed for this branch. Approval covered the next bundled-plugin comment
+  batch on the selected corrective detector and resolver files.
+- Which unknowns still block the edit, if any:
+  no code blocker remained for these two files. Wider slice unknowns still live
+  in `docs/unknowns/bundled-plugin-review.md` for the subjective-pack bypass,
+  checkout examples, and offline market parity.
+
+## 7. Packaged smoke receipts and release workflow console output
 
 - Exact area and files:
   `tools/smoke_packaged_desktop.py`,

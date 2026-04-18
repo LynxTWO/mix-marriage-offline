@@ -91,6 +91,9 @@ class LfeCorrectiveResolver(ResolverPlugin):
         issues: List[Issue],
     ) -> List[Recommendation]:
         recommendations: List[Recommendation] = []
+        # Session-level explicit LFE routing only narrows approval and rollback
+        # notes here. The resolver still emits recommendations; it does not
+        # apply, reroute, or fold content on its own.
         explicit_lfe_ids = set(explicit_lfe_stem_ids(session))
         index = 1
         for issue in issues:
@@ -135,6 +138,9 @@ class LfeCorrectiveResolver(ResolverPlugin):
                 _delta("PARAM.EQ.PHASE_MODE", filter_payload["phase_mode"], "UNIT.NONE"),
                 _delta("PARAM.SURROUND.SPEAKER_ID", "SPK.LFE", "UNIT.NONE"),
             ]
+            # Resolver output stays descriptive, not executory. Safe-render is
+            # the later approval path that may apply one of these candidates
+            # and rerun translation QA before keeping it.
             recommendations.append(
                 {
                     "recommendation_id": f"REC.LFE.CORRECTIVE_FILTER.{index:03d}",
@@ -160,6 +166,8 @@ class LfeCorrectiveResolver(ResolverPlugin):
                         },
                     ],
                     "notes": notes,
+                    # Keep the detector evidence intact so approval receipts
+                    # and blocked recommendations still cite the measured stem.
                     "evidence": [
                         entry
                         for entry in issue.get("evidence", [])
