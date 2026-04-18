@@ -109,13 +109,23 @@ against current repo-local proof and records what still blocks certainty.
 ## 4. Machine-readable output escape channels
 
 - Claim not yet proven:
-  which CI, support, or issue-handling channels capture or forbid
+  which shared channels beyond the repo bug template capture or forbid
   machine-readable output from `_project.py`, `scan_session.py`, and
   `tools/agent/*`
 - Exact files and docs checked:
   `src/mmo/cli_commands/_project.py`, `src/mmo/tools/scan_session.py`,
+  `src/mmo/cli_commands/_gui_rpc.py`, `src/mmo/cli_commands/_analysis.py`,
   `tools/agent/run.py`, `tools/agent/trace.py`,
-  `tools/agent/contract_stamp.py`, `docs/security/logging-audit.md`,
+  `tools/agent/contract_stamp.py`, `.github/ISSUE_TEMPLATE/bug_report.yml`,
+  `.github/ISSUE_TEMPLATE/feature_request.yml`,
+  `.github/pull_request_template.md`, `.github/workflows/ci.yml`,
+  `.github/workflows/release.yml`, `docs/13-gui-handshake.md`,
+  `docs/user_guide.md`, `docs/manual/04-the-main-workflows.md`,
+  `docs/agent_repl_harness.md`, `gui/server.mjs`, `gui/web/app.js`,
+  `tests/test_cli_project_show.py`, `tests/test_cli_project_load_save.py`,
+  `tests/test_cli_scan_lfe_audit.py`, `tests/test_cli_gui_rpc.py`,
+  `tests/test_analyze_stems_keep_scan.py`, `tests/test_agent_harness.py`,
+  `docs/security/logging-audit.md`,
   `docs/unknowns/logging-audit.md`,
   `docs/review/scenario-stress-test.md`,
   `docs/unknowns/adversarial-pass.md`,
@@ -123,22 +133,38 @@ against current repo-local proof and records what still blocks certainty.
   `docs/unknowns/remediation-pass.md`
 - Evidence that supports the concern:
   `_project.py` prints `project_dir`, per-artifact `absolute_path`, and related
-  machine-readable state. `scan_session.py` emits report JSON with path-bearing
-  fields and media-tag-derived content. `tools/agent/*` persists local NDJSON
-  trace and contract-stamp artifacts with path-bearing fields. The logging
-  audit and backlog already mark these as sensitive output boundaries.
+  machine-readable state, and the project CLI tests parse that stdout as a
+  stable JSON contract. `_gui_rpc.py`, `gui/server.mjs`, and `gui/web/app.js`
+  prove one local browser-visible path for that `project.show` JSON through the
+  GUI RPC bridge, and `docs/13-gui-handshake.md` documents that flow. By
+  contrast, `scan_session.py` emits report JSON with path-bearing fields and
+  media-tag-derived content, but the normal repo wrappers use file-backed or
+  in-memory handling: `_analysis.py` shells out with `--out`, `analyze_stems.py`
+  always writes a scan report to disk, `variants.py` loads the scan module
+  directly, and the scan tests parse stdout in memory without uploading it.
+  `tools/agent/*` persists local NDJSON trace and contract-stamp artifacts with
+  path-bearing fields. The bug template asks reporters for exact commands,
+  exact artifact paths, and machine-readable behavior, while also telling them
+  to remove private file paths and sensitive data. That proves one repo-owned
+  manual paste channel. Workflow inspection found screenshot, manual, bundle,
+  and dist uploads, but no repo-owned upload path for project JSON, scan JSON,
+  or agent trace artifacts.
 - Evidence still missing:
-  repo-local proof of which shared channels capture those outputs and whether
-  any automation depends on the current shape
+  repo-local proof of whether support transcripts, maintainer issue replies, CI
+  logs, or other out-of-repo habits capture these outputs in practice, plus any
+  explicit rule that forbids pasting raw project or scan JSON into shared
+  channels
 - Next best repo-local check:
-  inspect support docs, issue templates, and any repo-owned artifact-upload or
-  transcript guidance
+  inspect any remaining maintainer or support guidance in the repo, then treat
+  the remaining gap as an out-of-repo workflow question instead of a missing
+  code path
 - Out-of-repo boundary that still blocks certainty:
-  support workflows, CI artifact sharing, and issue-thread practices outside
-  repo-owned automation
+  support workflows, CI log handling, and issue-thread or chat practices
+  outside repo-owned automation
 - Confidence after this pass:
-  the path-bearing output surfaces are `verified`, but the escape channels stay
-  `unknown`
+  the path-bearing output surfaces, one manual issue-report channel, and the
+  lack of repo-owned workflow uploads are `verified`, but the full
+  escape-channel map stays `unknown`
 
 ## 5. `tools/agent/*` artifact-contract boundary
 
@@ -147,27 +173,35 @@ against current repo-local proof and records what still blocks certainty.
   format before the repo changes the current persisted artifact shape
 - Exact files and docs checked:
   `tools/agent/run.py`, `tools/agent/trace.py`,
-  `tools/agent/contract_stamp.py`, `docs/security/logging-audit.md`,
+  `tools/agent/contract_stamp.py`, `.gitignore`,
+  `.github/ISSUE_TEMPLATE/bug_report.yml`, `.github/workflows/ci.yml`,
+  `.github/workflows/release.yml`, `docs/agent_repl_harness.md`,
+  `tests/test_agent_harness.py`, `docs/security/logging-audit.md`,
   `docs/unknowns/logging-audit.md`, `docs/review/safe-fix-plan.md`,
   `docs/review/remediation-backlog.md`,
   `docs/unknowns/remediation-pass.md`
 - Evidence that supports the concern:
   the agent harness intentionally persists local trace and contract-stamp
   artifacts. The current shape is deterministic, documented, and validated by
-  existing docs and tests. That makes future hardening a contract-boundary
-  change rather than a casual cleanup.
+  existing docs and tests. `.gitignore` excludes `sandbox_tmp/` and
+  `.mmo_agent/`, which supports the local-artifact contract. Workflow
+  inspection found no repo-owned upload path for those files. The bug template
+  leaves open generic manual path sharing, but it does not name these artifacts
+  specifically. That makes future hardening a contract-boundary change rather
+  than a casual cleanup.
 - Evidence still missing:
   repo-local proof that any shared or automated channel requires a sanitized
-  artifact contract
+  artifact contract, or that a human support workflow expects these exact files
+  in issue threads or PR review
 - Next best repo-local check:
-  trace whether any repo-owned process exports or depends on those artifacts
-  outside local runs
+  confirm whether any repo-owned support, review, or workflow note asks humans
+  to share these artifacts before planning a contract change
 - Out-of-repo boundary that still blocks certainty:
   manual sharing of trace files, support transcripts, or CI artifact handling
   outside the repo
 - Confidence after this pass:
-  the artifact shape is `verified`, but the need for a new contract stays
-  `unknown`
+  the artifact shape and lack of repo-owned upload paths are `verified`, but
+  the need for a new contract stays `unknown`
 
 ## 6. PR template enforcement outside the repo
 
