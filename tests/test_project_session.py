@@ -144,6 +144,30 @@ class TestProjectSession(unittest.TestCase):
                 [{"path": "renders/render_preflight.json", "payload": receipt_payload}],
             )
 
+    def test_load_rejects_non_allowlisted_receipt_path(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            session_path = Path(temp_dir) / "project_session.json"
+            self._write_json(
+                session_path,
+                {
+                    "schema_version": "0.1.0",
+                    "scene": {"schema_version": "0.1.0", "scene_id": "SCENE.DRAFT.TEST"},
+                    "history": [],
+                    "receipts": [
+                        {
+                            "path": "renders/custom_receipt.json",
+                            "payload": {"schema_version": "0.1.0"},
+                        }
+                    ],
+                },
+            )
+
+            with self.assertRaisesRegex(
+                ValueError,
+                "allowlisted project receipt paths",
+            ):
+                load_project_session(session_path)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -6,10 +6,13 @@ of allowlisted artifacts with known schema shapes.
 Project scaffold workflow. mmo project init --stems-root ./stems --out-dir
 ./project mmo project refresh --project-dir ./project --stems-root ./stems
 
-Session persistence. Save a session (scene + history + receipts): mmo project
-save ./project --session out/session.json
+Session persistence. Save a session (scene + history + allowlisted receipt
+snapshots): mmo project save ./project --session out/session.json
 
 Reload it later: mmo project load ./project --session out/session.json
+
+The current session receipt scaffold is `renders/render_execute.json`,
+`renders/render_preflight.json`, and `renders/render_qa.json`.
 
 Shell use now defaults to the shared-safe session summary. Use `--format json`
 only when local tooling truly needs full machine-local paths in the save or

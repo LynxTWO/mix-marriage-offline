@@ -10,6 +10,47 @@ small enough to review as docs-only work.
 
 ## Current protected-area batch
 
+## 16. Project session receipt restore allowlist
+
+- Exact files to change:
+  `src/mmo/core/config.py`,
+  `tests/test_project_session.py`,
+  `tests/test_cli_project_load_save.py`,
+  `docs/review/safe-fix-plan.md`,
+  `docs/manual/12-projects-sessions-and-artifacts.md`,
+  `docs/user_guide.md`
+- Why this change is safe now:
+  session save already exports only the current scaffold receipts under
+  `renders/`, and the repo docs, tests, and project flows all point at those
+  same receipt names. The broad load-time receipt path contract is wider than
+  the scaffold the repo now documents and writes.
+- What behavior must remain unchanged:
+  `project_session.json` defaults, session schema version, scene and history
+  restore behavior, current `renders/render_execute.json`,
+  `renders/render_preflight.json`, and `renders/render_qa.json` restore
+  semantics, `--force` overwrite behavior, and the shared-safe CLI output
+  profiles for `project save` and `project load`
+- Tests or checks to run:
+  `tools/run_pytest.sh -q tests/test_project_session.py tests/test_cli_project_load_save.py`,
+  `python3 tools/validate_contracts.py`,
+  `npx --yes markdownlint-cli docs/review/safe-fix-plan.md docs/manual/12-projects-sessions-and-artifacts.md docs/user_guide.md`,
+  and `git diff --check -- src/mmo/core/config.py tests/test_project_session.py tests/test_cli_project_load_save.py docs/review/safe-fix-plan.md docs/manual/12-projects-sessions-and-artifacts.md docs/user_guide.md`
+- Docs to update:
+  `docs/review/safe-fix-plan.md`,
+  `docs/manual/12-projects-sessions-and-artifacts.md`,
+  `docs/user_guide.md`
+- Rollback note:
+  restore the broader receipt-path validation only if a real repo-owned
+  project-session flow proves it needs to restore receipt JSON outside the
+  current scaffold
+- Observability note:
+  none; this is a project-session restore contract trim, not a logging change
+- Change type:
+  behavior-preserving code cleanup
+- Compatibility trim note:
+  this batch retires broad receipt-restore compatibility that the repo does
+  not write or document anymore
+
 ## 15. Packaged smoke and release workflow shared-safe logging
 
 - Exact files to change:

@@ -297,6 +297,35 @@ class TestCliProjectLoadSave(unittest.TestCase):
         self.assertIn("renders/render_preflight.json", payload["written"])
         self.assertNotIn(project_dir.resolve().as_posix(), stdout)
 
+    def test_project_load_rejects_non_allowlisted_receipt_path(self) -> None:
+        base = _SANDBOX / "load_rejects_custom_receipt"
+        project_dir = _init_project(base)
+        session_path = project_dir / "project_session.json"
+        session_path.write_text(
+            json.dumps(
+                {
+                    "schema_version": "0.1.0",
+                    "scene": {"schema_version": "0.1.0", "scene_id": "SCENE.DRAFT.TEST"},
+                    "history": [],
+                    "receipts": [
+                        {
+                            "path": "renders/custom_receipt.json",
+                            "payload": {"schema_version": "0.1.0"},
+                        }
+                    ],
+                },
+                indent=2,
+                sort_keys=True,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+
+        exit_code, _, stderr = _run_main(["project", "load", str(project_dir), "--force"])
+        self.assertEqual(exit_code, 1)
+        self.assertIn("allowlisted project receipt paths", stderr)
+        self.assertFalse((project_dir / "renders" / "custom_receipt.json").exists())
+
 
 if __name__ == "__main__":
     unittest.main()
