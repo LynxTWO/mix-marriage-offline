@@ -31,6 +31,10 @@ Recently completed on this branch:
 - `scan_session` and `mmo scan` now support `--format json-shared`, and
   shell-facing scan stdout now defaults to the shared-safe contract while
   `--out` and explicit `--format json` keep the full local report.
+- `tools/smoke_packaged_desktop.py` and `.github/workflows/release.yml` now
+  keep packaged smoke and Windows release console output on artifact labels,
+  installer kind, signature status, and bounded status summaries while leaving
+  full install-state and installer-log detail on disk only.
 - Bundled plugin implementations and packaged plugin data now have a dedicated
   read-only review in `docs/review/bundled-plugin-review.md`. The coverage
   ledger moved that slice from `deferred` to `mapped`.
@@ -58,9 +62,9 @@ authority or render paths.
 
 ## Approval-gated
 
-| Title | Area or slice | Risk level | Likely impact | Why it matters | Evidence found | Confidence | Approval needed | Recommended next prompt or pass type | Smallest safe next step | Verification plan | Owner if known | Current status |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| Narrow packaged smoke receipts and release workflow console output | Packaged smoke and release control plane in `tools/smoke_packaged_desktop.py` and `.github/workflows/release.yml` | High | Medium | The smoke harness emits path-rich JSON on success and raw installer stdout, stderr, and log tails on failure. The Windows release workflow also echoes install paths directly into CI logs. Both sit on protected support and control-plane paths. | `docs/security/logging-audit.md` findings for `tools/smoke_packaged_desktop.py` and `.github/workflows/release.yml`; `docs/security/logging-audit.md` approval-status rows for packaged smoke receipt output and Windows install path echoes; `docs/review/adversarial-pass.md` protected-area list and support-tool priority; `docs/architecture/coverage-ledger.md` row `Support tooling, smoke harnesses, and release control plane` | verified | yes | packaged-smoke and release-log redaction pass | First narrow the smoke harness output contract to artifact kind, verdict, and bounded status summaries, then remove raw install-path echoes from workflow console output. Keep full installer logs on disk or as opt-in artifacts only. | `python3 -m py_compile tools/smoke_packaged_desktop.py`; `tools/run_pytest.sh -q tests/test_packaged_desktop_smoke.py tests/test_packaged_smoke_goldens.py`; `python tools/validate_contracts.py`; review the release workflow diff for console-output shape before merge. | desktop packaging or release tooling | open |
+No open item currently fits this bucket. The current protected log-boundary
+items landed on this branch, and the remaining work now sits in evidence gaps
+or future explicit-local contract decisions.
 
 ## Needs more evidence
 

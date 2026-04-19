@@ -10,6 +10,50 @@ small enough to review as docs-only work.
 
 ## Current protected-area batch
 
+## 15. Packaged smoke and release workflow shared-safe logging
+
+- Exact files to change:
+  `tools/smoke_packaged_desktop.py`,
+  `tests/test_packaged_desktop_smoke.py`,
+  `.github/workflows/release.yml`,
+  `docs/review/safe-fix-plan.md`,
+  `docs/review/approval-packets.md`,
+  `docs/architecture/coverage-ledger.md`,
+  `docs/security/logging-audit.md`,
+  `docs/unknowns/logging-audit.md`,
+  `docs/review/remediation-backlog.md`
+- Why this change is safe now:
+  the release job and smoke tests prove the real contract is exit status plus
+  the on-disk install-state artifact. The repo does not have a parser that
+  depends on the current path-rich stdout, stderr, or workflow `Write-Host`
+  lines.
+- What behavior must remain unchanged:
+  packaged smoke exit codes, installer execution, Windows install-state JSON
+  written to disk, deferred cleanup behavior, signature verification inputs,
+  render-truth validation, and local installer-log retention on disk
+- Tests or checks to run:
+  `python3 -m py_compile tools/smoke_packaged_desktop.py`,
+  `tools/run_pytest.sh -q tests/test_packaged_desktop_smoke.py tests/test_packaged_smoke_goldens.py`,
+  `python3 tools/validate_contracts.py`,
+  `npx --yes markdownlint-cli docs/review/safe-fix-plan.md docs/review/approval-packets.md docs/architecture/coverage-ledger.md docs/security/logging-audit.md docs/unknowns/logging-audit.md docs/review/remediation-backlog.md`,
+  and `git diff --check -- tools/smoke_packaged_desktop.py tests/test_packaged_desktop_smoke.py .github/workflows/release.yml docs/review/safe-fix-plan.md docs/review/approval-packets.md docs/architecture/coverage-ledger.md docs/security/logging-audit.md docs/unknowns/logging-audit.md docs/review/remediation-backlog.md`
+- Docs to update:
+  `docs/review/safe-fix-plan.md`,
+  `docs/review/approval-packets.md`,
+  `docs/architecture/coverage-ledger.md`,
+  `docs/security/logging-audit.md`,
+  `docs/unknowns/logging-audit.md`,
+  `docs/review/remediation-backlog.md`
+- Rollback note:
+  restore the old printed payloads and path-bearing workflow labels if the new
+  bounded summaries prove too sparse for release triage, but keep the on-disk
+  install-state artifact unchanged in either direction
+- Observability note:
+  keep full installer logs and install-state paths on disk. Only narrow the
+  printed copies that land in shared console or CI logs.
+- Change type:
+  behavior-preserving code cleanup
+
 ## 14. Shell-facing scan stdout shared-safe profile and default
 
 - Exact files to change:

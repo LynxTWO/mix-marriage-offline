@@ -369,14 +369,18 @@ review. This pass does not edit application code.
   `docs/security/logging-audit.md` marked the smoke harness and Windows release
   console output as active leaks on protected support and control-plane paths.
   The publish-and-release evidence pass confirmed that the repo still cannot
-  prove the full out-of-repo installer and signer boundary.
+  prove the full out-of-repo installer and signer boundary. This branch now
+  narrows the printed smoke payloads, cleanup payloads, Windows failure
+  receipts, and the Windows release workflow console labels to shared-safe
+  summaries. The on-disk Windows install-state file still keeps the full local
+  paths because cleanup and signature verification need that state artifact.
 - Smallest safe edit after approval:
-  narrow the smoke harness output to artifact kind, verdict, and bounded status
-  summaries first, then remove raw install-path echoes from workflow console
-  output while leaving full logs on disk or as opt-in artifacts only
+  completed on this branch by keeping smoke and workflow output on artifact
+  labels, installer kind, signature status, and bounded line counts while
+  leaving full installer logs and the Windows install-state JSON on disk only
 - What could break:
-  smoke-tool tests, release-triage habits, or CI expectations around current
-  console output shape
+  smoke-tool tests, release-triage habits, or CI expectations around the old
+  path-rich console shape
 - Verification plan:
   `python3 -m py_compile tools/smoke_packaged_desktop.py`,
   `tools/run_pytest.sh -q tests/test_packaged_desktop_smoke.py tests/test_packaged_smoke_goldens.py`,
@@ -386,11 +390,11 @@ review. This pass does not edit application code.
   revert the output narrowing if smoke tests or release triage lose required
   signal
 - What human decision is required:
-  approve narrowing release and smoke logs on a protected control-plane path
-  and decide whether any full installer detail should remain available only as
-  local or opt-in artifacts
+  completed for this branch. Approval covered narrowing the shared console
+  copies while keeping full installer detail available only through the local
+  install-state file and installer logs on disk.
 - Which unknowns still block the edit, if any:
-  `docs/unknowns/remediation-pass.md` still records missing repo-local proof of
-  the Windows installer and signing boundary, and
-  `docs/unknowns/logging-audit.md` still notes runtime-dependent installer
-  output
+  no code blocker remained for the shared-output boundary. Wider release and
+  installer-boundary unknowns still live in
+  `docs/unknowns/remediation-pass.md` and
+  `docs/unknowns/logging-audit.md`.
