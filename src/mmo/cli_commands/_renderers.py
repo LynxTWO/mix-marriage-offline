@@ -229,6 +229,39 @@ def _portable_ref_for_workspace(
     )
 
 
+def _live_progress_where_path(
+    path: Path,
+    *,
+    workspace_dir: Path | None,
+    fallback: str,
+) -> str:
+    resolved_path = path.resolve()
+    if workspace_dir is not None:
+        try:
+            return resolved_path.relative_to(workspace_dir.resolve()).as_posix()
+        except ValueError:
+            pass
+    fallback_text = _coerce_str(fallback).strip()
+    return fallback_text or resolved_path.name or "artifact"
+
+
+def _live_progress_where_optional_path(
+    path: Path | None,
+    *,
+    workspace_dir: Path | None,
+    fallback: str,
+) -> str:
+    if path is None:
+        return fallback
+    # Live progress goes to stderr and often ends up in pasted diagnostics. Keep
+    # `where` on workspace-relative refs or stable labels instead of raw paths.
+    return _live_progress_where_path(
+        path,
+        workspace_dir=workspace_dir,
+        fallback=fallback,
+    )
+
+
 def _rewrite_nested_path_fields(
     value: Any,
     *,
@@ -2559,7 +2592,14 @@ def _run_safe_render_command(
             scope="render",
             what="safe-render started",
             why="Beginning bounded-authority render workflow.",
-            where=[report_path.resolve().as_posix(), target],
+            where=[
+                _live_progress_where_path(
+                    report_path,
+                    workspace_dir=report_path.parent.resolve(),
+                    fallback="report.json",
+                ),
+                target,
+            ],
             confidence=1.0,
             evidence={"codes": ["SAFE_RENDER.STARTED"]},
         )
@@ -2866,7 +2906,13 @@ def _run_safe_render_command(
             phase="plugins",
             what="plugins loaded",
             why="Loaded detector, resolver, and renderer plugins for this target.",
-            where=[plugins_dir.resolve().as_posix()],
+            where=[
+                _live_progress_where_path(
+                    plugins_dir,
+                    workspace_dir=workspace_dir,
+                    fallback="plugins",
+                )
+            ],
             confidence=1.0,
             evidence={
                 "codes": ["SAFE_RENDER.PLUGINS.LOADED"],
@@ -3119,9 +3165,11 @@ def _run_safe_render_command(
                 what="dry-run receipt written",
                 why="Recorded bounded-authority results without writing audio.",
                 where=[
-                    receipt_out_path.resolve().as_posix()
-                    if receipt_out_path is not None
-                    else "safe_render.receipt.json"
+                    _live_progress_where_optional_path(
+                        receipt_out_path,
+                        workspace_dir=workspace_dir,
+                        fallback="safe_render.receipt.json",
+                    )
                 ],
                 confidence=1.0,
                 evidence={"codes": ["SAFE_RENDER.DRY_RUN.COMPLETED"]},
@@ -3271,7 +3319,13 @@ def _run_safe_render_command(
                 scope="render",
                 what="safe-render wrote zero outputs",
                 why="Renderer stage completed with no audio files emitted.",
-                where=[out_dir.resolve().as_posix()],
+                where=[
+                    _live_progress_where_path(
+                        out_dir,
+                        workspace_dir=workspace_dir,
+                        fallback="render_outputs",
+                    )
+                ],
                 confidence=1.0,
                 evidence={
                     "codes": ["SAFE_RENDER.NO_OUTPUTS"],
@@ -3297,7 +3351,13 @@ def _run_safe_render_command(
                 scope="render",
                 what="safe-render wrote only invalid masters",
                 why="All master deliverables failed because no stems decoded or the rendered output is effectively silent.",
-                where=[out_dir.resolve().as_posix()],
+                where=[
+                    _live_progress_where_path(
+                        out_dir,
+                        workspace_dir=workspace_dir,
+                        fallback="render_outputs",
+                    )
+                ],
                 confidence=1.0,
                 evidence={
                     "codes": ["SAFE_RENDER.INVALID_MASTERS"],
@@ -3324,7 +3384,13 @@ def _run_safe_render_command(
             phase="render",
             what="renderers completed",
             why="Applied eligible actions and wrote deterministic render outputs.",
-            where=[out_dir.resolve().as_posix()],
+            where=[
+                _live_progress_where_path(
+                    out_dir,
+                    workspace_dir=workspace_dir,
+                    fallback="render_outputs",
+                )
+            ],
             confidence=1.0,
             evidence={
                 "codes": ["SAFE_RENDER.RENDERERS.COMPLETED"],
@@ -3403,9 +3469,11 @@ def _run_safe_render_command(
             what="render QA completed",
             why="Computed post-render QA metrics and issue severities.",
             where=[
-                qa_out_path.resolve().as_posix()
-                if qa_out_path is not None
-                else "safe_render.qa"
+                _live_progress_where_optional_path(
+                    qa_out_path,
+                    workspace_dir=workspace_dir,
+                    fallback="safe_render.qa",
+                )
             ],
             confidence=1.0,
             evidence={
@@ -3417,11 +3485,9 @@ def _run_safe_render_command(
             },
         )
 
-        # Safe-render remains back-compatible and user-helpful by keeping
-        # partial/safe artifacts plus explicit QA failure metadata when
-        # similarity fallback exhausts. The only hard-stop retained here is
-        # the existing "no outputs" contract unless another explicit strict
-        # policy is introduced separately.
+        # Safe-render keeps partial artifacts plus explicit QA failure metadata
+        # when similarity fallback exhausts. The remaining hard-stops here are
+        # still the existing "no outputs" and "invalid masters" contracts.
         render_status = (
             LIFECYCLE_STATUS_BLOCKED
             if (
@@ -3587,9 +3653,11 @@ def _run_safe_render_command(
             what="safe-render receipt written",
             why="Persisted explainable render outcome and QA summary.",
             where=[
-                receipt_out_path.resolve().as_posix()
-                if receipt_out_path is not None
-                else "safe_render.receipt.json"
+                _live_progress_where_optional_path(
+                    receipt_out_path,
+                    workspace_dir=workspace_dir,
+                    fallback="safe_render.receipt.json",
+                )
             ],
             confidence=1.0,
             evidence={"codes": ["SAFE_RENDER.RECEIPT.WRITTEN"]},

@@ -10,6 +10,53 @@ small enough to review as docs-only work.
 
 ## Current protected-area batch
 
+## 9. Safe-render live-progress `where` redaction
+
+- Exact files to change:
+  `src/mmo/cli_commands/_renderers.py`,
+  `tests/test_cli_safe_render.py`,
+  `docs/review/safe-fix-plan.md`,
+  `docs/review/approval-packets.md`,
+  `docs/architecture/coverage-ledger.md`,
+  `docs/security/logging-audit.md`,
+  `docs/unknowns/logging-audit.md`,
+  `docs/review/remediation-backlog.md`
+- Why this change is safe now:
+  the approval packet already narrowed this protected batch to `safe-render`
+  live-progress `where` values, the current tests only require the `where`
+  field to exist, and the desktop live-progress surfaces treat `where` as
+  display text instead of a path lookup contract
+- What behavior must remain unchanged:
+  `safe-render` stage order, recommendation and render behavior, live-progress
+  JSON shape outside the path values, stderr emission on `--live-progress`, and
+  the current desktop handling of live-progress events
+- Tests or checks to run:
+  `tools/run_pytest.sh -q tests/test_cli_safe_render.py -k "live_progress or cancel_file_stops_safe_render_with_exit_130"`,
+  `python3 tools/validate_contracts.py`,
+  one local dry-run `safe-render --live-progress` stderr sample,
+  one local full-render `safe-render --live-progress` stderr sample,
+  `npx --yes markdownlint-cli docs/review/safe-fix-plan.md docs/review/approval-packets.md docs/architecture/coverage-ledger.md docs/security/logging-audit.md docs/unknowns/logging-audit.md docs/review/remediation-backlog.md`,
+  and `git diff --check -- src/mmo/cli_commands/_renderers.py tests/test_cli_safe_render.py docs/review/safe-fix-plan.md docs/review/approval-packets.md docs/architecture/coverage-ledger.md docs/security/logging-audit.md docs/unknowns/logging-audit.md docs/review/remediation-backlog.md`
+- Docs to update:
+  `docs/review/safe-fix-plan.md`,
+  `docs/review/approval-packets.md`,
+  `docs/architecture/coverage-ledger.md`,
+  `docs/security/logging-audit.md`,
+  `docs/unknowns/logging-audit.md`,
+  `docs/review/remediation-backlog.md`
+- Rollback note:
+  revert the bounded `where` helper and restore the prior absolute-path payload
+  if a live-progress consumer proves it needs the old path contract
+- Observability note:
+  keep `where` on stable labels or workspace-relative refs. Do not widen this
+  batch into generic stderr changes or unrelated render receipt fields.
+- Change type:
+  behavior-preserving code cleanup
+- Compatibility trim note:
+  this batch does not remove extra backward-compatibility logic. The reviewed
+  live-progress slice did not prove a dead compatibility branch that was safe
+  to trim.
+
 ## 8. `project.show` shared-log-safe JSON profile
 
 - Exact files to change:

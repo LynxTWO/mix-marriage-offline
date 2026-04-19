@@ -120,11 +120,11 @@ review. This pass does not edit application code.
   no code blocker remains. `docs/unknowns/logging-audit.md` keeps a runtime
   spot-check note for one failing dev-shell path.
 
-## 3. Render live-progress path output
+## 3. Render live-progress path output (implemented on this branch)
 
 - Exact area and files:
   `src/mmo/cli_commands/_renderers.py`,
-  `src/mmo/core/progress.py`
+  `tests/test_cli_safe_render.py`
 - Protected-area category:
   render, QA, and output-stage logging on an audio-changing path
 - Why the risk matters:
@@ -133,27 +133,36 @@ review. This pass does not edit application code.
   protected render path.
 - Current evidence:
   `docs/security/logging-audit.md` marked the live-progress path as a
-  conditional leak in a protected render surface, and the backlog still treats
-  it as approval-gated.
+  conditional leak in a protected render surface, and the backlog treated it as
+  approval-gated. The desktop sidecar only parses `where` as `string[]`, the
+  desktop UI renders it as display text, and the existing safe-render
+  live-progress test only required `where` to exist. This branch now narrows
+  the path-bearing entries in `_renderers.py` to target IDs, stable labels, and
+  workspace-relative refs instead of absolute paths.
 - Smallest safe edit after approval:
-  replace absolute `where` path values with artifact labels or stable
-  project-relative identifiers where full paths are not required
+  completed on this branch by keeping `where` on target IDs, stable artifact
+  labels, and workspace-relative refs where the render workspace already owns
+  the path context
 - What could break:
-  log consumers, manual triage habits, or tests that expect the current
-  `where` fields to contain full paths
+  log consumers, manual triage habits, or tests that assumed `where` always
+  carried full absolute paths
 - Verification plan:
-  `tools/run_pytest.sh -q tests/test_cli_safe_render.py tests/test_safe_render_live_progress.py`
-  and `python3 tools/validate_contracts.py`, plus inspection of a fresh
-  `[MMO-LIVE]` stderr sample
+  this branch ran
+  `tools/run_pytest.sh -q tests/test_cli_safe_render.py -k "live_progress or cancel_file_stops_safe_render_with_exit_130"`,
+  `python3 tools/validate_contracts.py`,
+  one local dry-run `safe-render --live-progress` stderr sample,
+  and one local full-render `safe-render --live-progress` stderr sample
 - Rollback plan:
-  revert to the previous `where` payload if log consumers or tests require the
-  full path contract
+  revert the bounded `where` helper if a live-progress consumer proves it needs
+  the old absolute-path contract
 - What human decision is required:
-  approve narrowing render live-progress output on a protected render path and
-  choosing whether artifact labels are enough for operator diagnostics
+  completed for this branch. Approval covered narrowing the protected
+  live-progress path without widening the change into receipt, QA, or generic
+  stderr behavior.
 - Which unknowns still block the edit, if any:
-  no strong repo-local blocker is recorded, but out-of-repo log consumers are
-  still unproven
+  no strong repo-local blocker remains for this path. The remaining log-sharing
+  uncertainty is broader and still lives in the packaged smoke and project or
+  scan output packets.
 
 ## 4. Bundled-plugin loader and market trust-boundary comments (implemented on this branch)
 
