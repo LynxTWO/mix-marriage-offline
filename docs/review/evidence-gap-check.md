@@ -8,13 +8,18 @@ against current repo-local proof and records what still blocks certainty.
 ## 1. Support-script audience and real call sites
 
 - Claim not yet proven:
-  which maintainer, CI, or release workflows rely on
-  `tools/safe_cleanup.py`, `tools/sync_packaged_data_mirror.py`, and
-  `tools/sync_claude_agents.py`
+  whether any hidden bootstrap, wrapper, or out-of-repo maintainer routine
+  relies on `tools/safe_cleanup.py`, `tools/sync_packaged_data_mirror.py`, or
+  `tools/sync_claude_agents.py` beyond the documented human-run paths
 - Exact files and docs checked:
   `tools/safe_cleanup.py`, `tools/sync_packaged_data_mirror.py`,
-  `tools/sync_claude_agents.py`, `docs/architecture/coverage-ledger.md`,
-  `docs/review/adversarial-pass.md`, `docs/review/scenario-stress-test.md`,
+  `tools/sync_claude_agents.py`, `.github/workflows/ci.yml`,
+  `.github/workflows/release.yml`, `docs/PROJECT_INSTRUCTIONS.md`,
+  `docs/00-quickstart.md`, `docs/21-loudness-profiles.md`, `CLAUDE.md`,
+  `docs/contributing/ai-workflow.md`,
+  `tools/validate_packaged_data_mirror.py`,
+  `docs/architecture/coverage-ledger.md`, `docs/review/adversarial-pass.md`,
+  `docs/review/scenario-stress-test.md`,
   `docs/unknowns/adversarial-pass.md`,
   `docs/unknowns/scenario-stress-test.md`,
   `docs/unknowns/remediation-pass.md`
@@ -24,28 +29,42 @@ against current repo-local proof and records what still blocks certainty.
   mirror files under `src/mmo/data/`. `sync_claude_agents.py` rewrites the
   `.claude/agents/` mirror from the canonical `docs/claude_agents/` source.
   The side effects are real and bounded, which confirms these scripts are
-  control-plane paths rather than harmless glue.
+  control-plane paths rather than harmless glue. The repo now proves all three
+  human-run audiences: `docs/PROJECT_INSTRUCTIONS.md` and
+  `docs/00-quickstart.md` tell maintainers to run `safe_cleanup.py`,
+  `docs/21-loudness-profiles.md` plus `tools/validate_packaged_data_mirror.py`
+  tell maintainers to run `sync_packaged_data_mirror.py` when packaged data
+  drifts, and `CLAUDE.md` plus `docs/contributing/ai-workflow.md` tell local
+  contributors that `.claude/agents/` is a synced convenience mirror driven by
+  `sync_claude_agents.py`. CI and release still do not run any of the three
+  scripts directly, but `sync_packaged_data_mirror.py` is enforced indirectly
+  because `validate_contracts.py` runs `PKG.MIRROR` in CI and release.
 - Evidence still missing:
-  repo-local proof of who runs each script, how often each one is used, and
-  whether any workflow or maintainer runbook treats them as standard operating
-  steps
+  repo-local proof of whether any hidden setup wrapper, onboarding checklist,
+  or release prep routine runs these scripts automatically instead of as
+  documented human steps
 - Next best repo-local check:
-  trace each script through workflow jobs, docs, runbooks, and any helper
-  wrappers still in the repo
+  inspect script history and any bootstrap or setup notes for evidence of an
+  automated wrapper before broadening the support-tool slice again
 - Out-of-repo boundary that still blocks certainty:
-  maintainer habits or release procedures that are not written down in the repo
+  maintainer habits or local bootstrap routines that are not written down in
+  the repo
 - Confidence after this pass:
-  side effects are `verified`, but audience and ownership stay `unknown`
+  side effects are `verified`, the documented human audience is now `verified`
+  for all three scripts, and the remaining gap is hidden automation or
+  unwritten maintainer practice
 
 ## 2. Helper-entrypoint audience and trusted-evidence role
 
 - Claim not yet proven:
-  whether `tools/run_renderers.py`, `tools/benchmark_render_precision.py`, and
-  `tools/capture_tauri_screenshots.py` are CI-only, maintainer-only, or
-  operator-facing, and whether their outputs count as trusted review evidence
+  whether `tools/run_renderers.py` and `tools/benchmark_render_precision.py`
+  have a documented audience or trusted-output role comparable to the
+  screenshot capture helper
 - Exact files and docs checked:
   `tools/run_renderers.py`, `tools/benchmark_render_precision.py`,
-  `tools/capture_tauri_screenshots.py`,
+  `tools/capture_tauri_screenshots.py`, `.github/workflows/ci.yml`,
+  `docs/manual/assets/screenshots/README.md`,
+  `gui/desktop-tauri/tests/capture-screenshots.spec.ts`,
   `docs/architecture/coverage-ledger.md`,
   `docs/review/adversarial-pass.md`,
   `docs/review/scenario-stress-test.md`,
@@ -58,18 +77,24 @@ against current repo-local proof and records what still blocks certainty.
   `benchmark_render_precision.py` writes temp scene and request artifacts,
   calls `mmo.cli.main("render-run", ...)`, and hashes outputs. The screenshot
   helper runs Playwright and refreshes committed screenshot baselines with a
-  fixed viewport contract.
+  fixed viewport contract. The repo now proves `capture_tauri_screenshots.py`
+  has two real audiences: `.github/workflows/ci.yml` regenerates screenshots
+  and uploads them as review artifacts, and
+  `docs/manual/assets/screenshots/README.md` documents it as the maintainer
+  refresh path for committed baselines.
 - Evidence still missing:
-  repo-local proof of intended audience, ownership, and whether these outputs
-  are CI evidence, maintainer-only artifacts, or operator-facing results
+  repo-local proof of intended audience, ownership, and evidence role for
+  `run_renderers.py` and `benchmark_render_precision.py`
 - Next best repo-local check:
-  trace the helpers through workflow files, README notes, and test harness docs
+  keep `capture_tauri_screenshots.py` on the trusted-evidence side, then trace
+  `run_renderers.py` and `benchmark_render_precision.py` through any remaining
+  workflow files, README notes, and benchmark docs
 - Out-of-repo boundary that still blocks certainty:
-  maintainer practice outside the repo, plus browser or Playwright runtime
-  behavior for screenshot capture
+  maintainer practice outside the repo for the renderer and benchmark helpers
 - Confidence after this pass:
-  helper side effects are `verified`, but audience and evidence role stay
-  `unknown`
+  helper side effects are `verified`, screenshot-helper audience and evidence
+  role are `verified`, and the remaining unknown is limited to
+  `run_renderers.py` and `benchmark_render_precision.py`
 
 ## 3. Public publish and Windows release boundaries
 
