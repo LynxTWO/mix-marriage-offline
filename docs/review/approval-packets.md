@@ -46,7 +46,8 @@ review. This pass does not edit application code.
   scan JSON, or agent trace artifacts. Phase 1 is now implemented on this
   branch: `project show --format json-shared` drops `project_dir` and
   per-artifact `absolute_path`, while the GUI and RPC path stays on the local
-  `json` contract.
+  `json` contract. A local shell and RPC spot-check confirmed that split
+  against the same temporary project.
 - Smallest safe edit after approval:
   completed phase 1 on this branch by adding `project show --format
   json-shared`. The next safe edit is still separate from scan: decide whether
@@ -62,9 +63,10 @@ review. This pass does not edit application code.
   phase 1 ran `tools/run_pytest.sh -q tests/test_cli_project_show.py tests/test_cli_gui_rpc.py`
   and `python3 tools/validate_contracts.py`. Remaining phases should add
   `tests/test_cli_project_load_save.py`, `tests/test_scan_smoke.py`, and
-  `tests/test_cli_scan_lfe_audit.py` when they touch those contracts, plus one
-  local dev-shell `project.show` spot-check and review of a captured stdout
-  sample after the change
+  `tests/test_cli_scan_lfe_audit.py` when they touch those contracts. This
+  phase also has one local shell `project.show --format json-shared` sample
+  and one local `mmo gui rpc` `project.show` sample that confirmed the routes
+  stay distinct at runtime.
 - Rollback plan:
   phase 1 can revert the new `json-shared` profile without changing the
   existing GUI or RPC contract. Leave scan untouched unless a later approved
