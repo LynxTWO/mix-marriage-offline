@@ -10,6 +10,58 @@ small enough to review as docs-only work.
 
 ## Current protected-area batch
 
+## 17. Project CLI explicit-local format rename
+
+- Exact files to change:
+  `src/mmo/cli.py`,
+  `src/mmo/cli_commands/_project.py`,
+  `tests/test_cli_project_show.py`,
+  `tests/test_cli_project_load_save.py`,
+  `docs/review/safe-fix-plan.md`,
+  `docs/review/approval-packets.md`,
+  `docs/security/logging-audit.md`,
+  `docs/manual/12-projects-sessions-and-artifacts.md`,
+  `docs/user_guide.md`,
+  `docs/13-gui-handshake.md`
+- Why this change is safe now:
+  shell-facing project commands already default to `json-shared`, and the repo
+  now has a real local GUI or RPC consumer pinned to the full local payload.
+  Renaming the shell-only explicit local profile to `json-local` makes that
+  boundary clearer without changing the actual local payload shape or the GUI
+  RPC contract.
+- What behavior must remain unchanged:
+  GUI RPC `project.show`, `project.save`, and `project.load` local `json`
+  payloads; `json-shared` shell payloads; project-session write and restore
+  semantics; allowlisted artifact order; deterministic payload contents for the
+  unchanged local and shared profiles; and browser hydration from
+  `absolute_path` receipts
+- Tests or checks to run:
+  `tools/run_pytest.sh -q tests/test_cli_project_show.py tests/test_cli_project_load_save.py tests/test_cli_gui_rpc.py`,
+  `python3 tools/validate_contracts.py`,
+  one local shell `project show --format json-local` sample,
+  one local shell `project save --format json-local` sample,
+  one local shell `project load --format json-local` sample,
+  `npx --yes markdownlint-cli docs/review/safe-fix-plan.md docs/review/approval-packets.md docs/security/logging-audit.md docs/manual/12-projects-sessions-and-artifacts.md docs/user_guide.md docs/13-gui-handshake.md`,
+  and `git diff --check -- src/mmo/cli.py src/mmo/cli_commands/_project.py tests/test_cli_project_show.py tests/test_cli_project_load_save.py docs/review/safe-fix-plan.md docs/review/approval-packets.md docs/security/logging-audit.md docs/manual/12-projects-sessions-and-artifacts.md docs/user_guide.md docs/13-gui-handshake.md`
+- Docs to update:
+  `docs/review/safe-fix-plan.md`,
+  `docs/review/approval-packets.md`,
+  `docs/security/logging-audit.md`,
+  `docs/manual/12-projects-sessions-and-artifacts.md`,
+  `docs/user_guide.md`,
+  `docs/13-gui-handshake.md`
+- Rollback note:
+  restore the CLI spelling to `json` only if a real shell caller proves it
+  depended on that exact flag name and cannot move to `json-local`
+- Observability note:
+  keep the payloads unchanged. This is a shell-contract naming cleanup, not a
+  telemetry or logging behavior change.
+- Change type:
+  behavior-preserving code cleanup
+- Compatibility trim note:
+  this batch trims an ambiguous shell-facing format name now that the repo has
+  a clearer shared-safe default and a real local GUI or RPC consumer
+
 ## 16. Project session receipt restore allowlist
 
 - Exact files to change:
@@ -168,9 +220,9 @@ small enough to review as docs-only work.
   CLI default, only docs and CLI tests, and the prior batch already proved the
   shell and RPC routes can diverge cleanly with RPC pinned to explicit `json`
 - What behavior must remain unchanged:
-  RPC `project.show` payload shape, explicit `--format json` behavior for CLI
-  project show, artifact allowlist order, deterministic output for unchanged
-  formats, and browser hydration from `absolute_path` receipts
+  RPC `project.show` payload shape, explicit `--format json-local` behavior
+  for CLI project show, artifact allowlist order, deterministic output for
+  unchanged formats, and browser hydration from `absolute_path` receipts
 - Tests or checks to run:
   `tools/run_pytest.sh -q tests/test_cli_project_show.py tests/test_cli_gui_rpc.py`,
   `python3 tools/validate_contracts.py`,
@@ -187,7 +239,8 @@ small enough to review as docs-only work.
   `docs/manual/12-projects-sessions-and-artifacts.md`
 - Rollback note:
   restore the CLI default to `json` if a shell-facing caller proves it relied
-  on the old machine-local path contract without passing `--format json`
+  on the old machine-local path contract without passing the explicit local
+  profile
 - Observability note:
   keep the browser and RPC route explicit on `json`. Do not widen this batch
   into scan-output redaction or GUI contract changes.
@@ -208,12 +261,12 @@ small enough to review as docs-only work.
   `docs/user_guide.md`
 - Why this change is safe now:
   the focused caller audit found no in-repo app consumer for the CLI defaults,
-  only tests and docs, and the prior batch already added explicit `json` and
-  `json-shared` profiles so the shell-facing default can narrow without
-  removing the full local path contract
+  only tests and docs, and the prior batch already added explicit local and
+  shared profiles so the shell-facing default can narrow without removing the
+  full local path contract
 - What behavior must remain unchanged:
-  RPC default `json` payloads, explicit `--format json` behavior for CLI save
-  and load, session write and restore semantics, receipt counts, and the
+  RPC default `json` payloads, explicit `--format json-local` behavior for CLI
+  save and load, session write and restore semantics, receipt counts, and the
   project-relative `written` paths that load reports
 - Tests or checks to run:
   `tools/run_pytest.sh -q tests/test_cli_project_load_save.py tests/test_cli_gui_rpc.py`,
@@ -232,7 +285,8 @@ small enough to review as docs-only work.
   `docs/user_guide.md`
 - Rollback note:
   restore the CLI default to `json` if a shell-facing caller proves it relied
-  on the old machine-local path contract without passing `--format json`
+  on the old machine-local path contract without passing the explicit local
+  profile
 - Observability note:
   keep this boundary limited to CLI defaults. Do not widen it into RPC default
   changes or scan-output redaction.
@@ -390,10 +444,10 @@ small enough to review as docs-only work.
   and an additive shared-log-safe JSON profile can reduce shell-facing path
   exposure without breaking the existing local machine-readable contract
 - What behavior must remain unchanged:
-  existing `project show --format json` payload shape, GUI RPC hydration,
-  browser-side artifact resolution from `absolute_path`, project-show artifact
-  allowlist order, deterministic output for unchanged formats, and all
-  `project save` or `project load` behavior
+  existing `project show --format json-local` shell payload shape, GUI RPC
+  hydration, browser-side artifact resolution from `absolute_path`,
+  project-show artifact allowlist order, deterministic output for unchanged
+  formats, and all `project save` or `project load` behavior
 - Tests or checks to run:
   `tools/run_pytest.sh -q tests/test_cli_project_show.py tests/test_cli_gui_rpc.py`,
   `python3 tools/validate_contracts.py`,

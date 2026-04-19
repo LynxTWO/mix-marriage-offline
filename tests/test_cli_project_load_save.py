@@ -85,7 +85,7 @@ class TestCliProjectLoadSave(unittest.TestCase):
         )
 
         exit_code, stdout, stderr = _run_main(
-            ["project", "save", str(project_dir), "--format", "json"]
+            ["project", "save", str(project_dir), "--format", "json-local"]
         )
         self.assertEqual(exit_code, 0, msg=stderr)
         payload = json.loads(stdout)
@@ -187,7 +187,7 @@ class TestCliProjectLoadSave(unittest.TestCase):
             encoding="utf-8",
         )
 
-        exit_code, _, stderr = _run_main(["project", "save", str(project_dir), "--format", "json"])
+        exit_code, _, stderr = _run_main(["project", "save", str(project_dir), "--format", "json-local"])
         self.assertEqual(exit_code, 0, msg=stderr)
 
         scene_path.write_text(
@@ -210,7 +210,7 @@ class TestCliProjectLoadSave(unittest.TestCase):
         self.assertIn("use --force", stderr)
 
         exit_code, stdout, stderr = _run_main(
-            ["project", "load", str(project_dir), "--force", "--format", "json"]
+            ["project", "load", str(project_dir), "--force", "--format", "json-local"]
         )
         self.assertEqual(exit_code, 0, msg=stderr)
         payload = json.loads(stdout)
@@ -247,7 +247,7 @@ class TestCliProjectLoadSave(unittest.TestCase):
             encoding="utf-8",
         )
 
-        exit_code, _, stderr = _run_main(["project", "save", str(project_dir), "--format", "json"])
+        exit_code, _, stderr = _run_main(["project", "save", str(project_dir), "--format", "json-local"])
         self.assertEqual(exit_code, 0, msg=stderr)
 
         exit_code, stdout, stderr = _run_main(["project", "load", str(project_dir), "--force"])

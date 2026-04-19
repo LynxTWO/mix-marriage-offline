@@ -14,13 +14,13 @@ Reload it later: mmo project load ./project --session out/session.json
 The current session receipt scaffold is `renders/render_execute.json`,
 `renders/render_preflight.json`, and `renders/render_qa.json`.
 
-Shell use now defaults to the shared-safe session summary. Use `--format json`
-only when local tooling truly needs full machine-local paths in the save or
-load output.
+Shell use now defaults to the shared-safe session summary. Use
+`--format json-local` only when local tooling truly needs full machine-local
+paths in the save or load output.
 
 Project metadata. Shell use now defaults to the shared-safe project summary.
-Use mmo project show ./project --format json only when local tooling needs the
-full allowlisted path receipts and artifact `absolute_path` fields.
+Use mmo project show ./project --format json-local only when local tooling
+needs the full allowlisted path receipts and artifact `absolute_path` fields.
 
 Bundles. A ui_bundle.json is a “pointer payload” that the GUI can consume. You
 can build one from a report plus optional artifacts: mmo bundle --report

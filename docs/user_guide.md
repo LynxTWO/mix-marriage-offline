@@ -127,8 +127,8 @@ python -m mmo project load ./project --session out/session.json
 ```
 
 The CLI now defaults those commands to the shared-safe summary profile. Use
-`--format json` only when local tooling needs the full machine-local path
-contract.
+`--format json-local` only when local tooling needs the full machine-local
+path contract.
 
 The current session receipt scaffold is `renders/render_execute.json`,
 `renders/render_preflight.json`, and `renders/render_qa.json`.

@@ -2717,12 +2717,13 @@ def main(argv: list[str] | None = None) -> int:
     )
     project_show_parser.add_argument(
         "--format",
-        choices=["json", "json-shared", "text"],
+        choices=["json-local", "json-shared", "text"],
         default="json-shared",
         help=(
             "Output format for project show output. "
             "'json-shared' drops machine-local path fields for shell use. "
-            "Use 'json' when local tooling needs the full GUI or RPC path contract."
+            "Use 'json-local' when local tooling needs the full path-bearing "
+            "shell contract."
         ),
     )
 
@@ -2998,12 +2999,13 @@ def main(argv: list[str] | None = None) -> int:
     )
     project_save_parser.add_argument(
         "--format",
-        choices=["json", "json-shared"],
+        choices=["json-local", "json-shared"],
         default="json-shared",
         help=(
             "Output format for project save output. "
             "'json-shared' narrows path fields for shared logs. "
-            "Use 'json' when local tooling needs full machine-local paths."
+            "Use 'json-local' when local tooling needs full machine-local "
+            "paths."
         ),
     )
 
@@ -3027,12 +3029,13 @@ def main(argv: list[str] | None = None) -> int:
     )
     project_load_parser.add_argument(
         "--format",
-        choices=["json", "json-shared"],
+        choices=["json-local", "json-shared"],
         default="json-shared",
         help=(
             "Output format for project load output. "
             "'json-shared' narrows path fields for shared logs. "
-            "Use 'json' when local tooling needs full machine-local paths."
+            "Use 'json-local' when local tooling needs full machine-local "
+            "paths."
         ),
     )
 
@@ -5187,7 +5190,7 @@ def main(argv: list[str] | None = None) -> int:
                     (
                         "Missing project directory. Usage: "
                         "mmo project show <project_dir> "
-                        "[--format json|json-shared|text]."
+                        "[--format json-local|json-shared|text]."
                     ),
                     file=sys.stderr,
                 )

@@ -688,7 +688,7 @@ def _run_project_show(
         print(str(exc), file=sys.stderr)
         return 1
 
-    if output_format == "json":
+    if output_format in {"json", "json-local"}:
         print(json.dumps(payload, indent=2, sort_keys=True))
         return 0
 
@@ -721,7 +721,7 @@ def _run_project_save(
         print(str(exc), file=sys.stderr)
         return 1
 
-    if output_format == "json":
+    if output_format in {"json", "json-local"}:
         print(json.dumps(payload, indent=2, sort_keys=True))
         return 0
 
@@ -762,7 +762,7 @@ def _run_project_load(
         print(str(exc), file=sys.stderr)
         return 1
 
-    if output_format == "json":
+    if output_format in {"json", "json-local"}:
         print(json.dumps(payload, indent=2, sort_keys=True))
         return 0
 

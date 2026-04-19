@@ -90,7 +90,7 @@ class TestProjectShowJSON(unittest.TestCase):
 
     def test_json_contains_allowlisted_artifact_metadata(self) -> None:
         exit_code, stdout, stderr = _run_main(
-            ["project", "show", str(self.project_dir), "--format", "json"]
+            ["project", "show", str(self.project_dir), "--format", "json-local"]
         )
         self.assertEqual(exit_code, 0, msg=stderr)
         payload = json.loads(stdout)
@@ -127,10 +127,10 @@ class TestProjectShowJSON(unittest.TestCase):
 
     def test_json_output_is_byte_identical_across_runs(self) -> None:
         _, stdout_a, _ = _run_main(
-            ["project", "show", str(self.project_dir), "--format", "json"]
+            ["project", "show", str(self.project_dir), "--format", "json-local"]
         )
         _, stdout_b, _ = _run_main(
-            ["project", "show", str(self.project_dir), "--format", "json"]
+            ["project", "show", str(self.project_dir), "--format", "json-local"]
         )
         self.assertEqual(stdout_a, stdout_b)
 
@@ -216,7 +216,7 @@ class TestProjectShowNoScanning(unittest.TestCase):
             new=_guarded_rglob,
         ):
             exit_code, stdout, stderr = _run_main(
-                ["project", "show", str(self.project_dir), "--format", "json"]
+                ["project", "show", str(self.project_dir), "--format", "json-local"]
             )
         self.assertEqual(exit_code, 0, msg=stderr)
         self.assertEqual(project_glob_calls, [])
@@ -228,7 +228,7 @@ class TestProjectShowNoScanning(unittest.TestCase):
 class TestProjectShowStableErrors(unittest.TestCase):
     def test_missing_project_directory_error_is_stable(self) -> None:
         missing_dir = _SANDBOX / "errors" / "missing_project"
-        command = ["project", "show", str(missing_dir), "--format", "json"]
+        command = ["project", "show", str(missing_dir), "--format", "json-local"]
         exit_code_a, stdout_a, stderr_a = _run_main(command)
         exit_code_b, stdout_b, stderr_b = _run_main(command)
 
@@ -243,7 +243,7 @@ class TestProjectShowStableErrors(unittest.TestCase):
         )
 
     def test_missing_project_directory_argument_error_is_stable(self) -> None:
-        command = ["project", "show", "--format", "json"]
+        command = ["project", "show", "--format", "json-local"]
         exit_code_a, stdout_a, stderr_a = _run_main(command)
         exit_code_b, stdout_b, stderr_b = _run_main(command)
 
@@ -257,7 +257,7 @@ class TestProjectShowStableErrors(unittest.TestCase):
             (
                 "Missing project directory. Usage: "
                 "mmo project show <project_dir> "
-                "[--format json|json-shared|text]."
+                "[--format json-local|json-shared|text]."
             ),
         )
 
