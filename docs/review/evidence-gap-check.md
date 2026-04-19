@@ -110,42 +110,86 @@ against current repo-local proof and records what still blocks certainty.
   role are `verified`, git history supports a maintainer-local role for the
   remaining two helpers, and a broader trusted-evidence role remains `unknown`
 
-## 3. Public publish and Windows release boundaries
+## 3. Public docs publish boundary
 
 - Claim not yet proven:
-  how `site/` is produced, and which parts of the Windows release, signing, and
-  installer path are repo-owned versus runner- or installer-owned
+  whether anything broader than the committed `site/` tree shapes the public
+  docs path inside the repo
 - Exact files and docs checked:
-  `.github/workflows/pages.yml`, `.github/workflows/release.yml`,
-  `site/index.html`, `site/styles.css`, `tools/smoke_packaged_desktop.py`,
+  `.github/workflows/pages.yml`, `site/index.html`, `site/styles.css`,
+  `site/.nojekyll`, `docs/architecture/system-map.md`,
+  `docs/architecture/coverage-ledger.md`,
+  `docs/review/adversarial-pass.md`,
+  `docs/review/scenario-stress-test.md`,
+  `docs/unknowns/scenario-stress-test.md`,
+  `docs/unknowns/maintenance-harness.md`,
+  git history for `site/` and `pages.yml`
+- Evidence that supports the concern:
+  `pages.yml` is a real public publish control plane with `pages: write`,
+  `id-token: write`, `actions/upload-pages-artifact`, and
+  `actions/deploy-pages`, but it uploads `site/` as-is. The tracked site tree
+  is only `index.html`, `styles.css`, and `.nojekyll`. I found no repo-local
+  script, package task, or workflow step that generates or rewrites `site/`
+  before deploy. Git history also supports direct editing of the committed
+  static files rather than a generated-output flow.
+- Evidence still missing:
+  repo-local proof that no external tool is ever used before a commit lands,
+  plus any repo-local proof of GitHub Pages hosting, caching, or environment
+  behavior after the artifact leaves the repo
+- Next best repo-local check:
+  treat `site/` as a committed static publish payload unless a later build
+  command, generator, or workflow step starts producing it
+- Out-of-repo boundary that still blocks certainty:
+  GitHub-hosted runner execution, `actions/*` internals, GitHub Pages hosting,
+  and serving or caching behavior after deploy
+- Confidence after this pass:
+  the repo-owned static site payload and direct deploy contract are `verified`.
+  The hosted Pages behavior is still `unknown`.
+
+## 4. Windows release and installer boundary
+
+- Claim not yet proven:
+  which parts of the Windows release, signing, and installer path are fully
+  repo-owned versus runner-, signer-, or installer-owned
+- Exact files and docs checked:
+  `.github/workflows/release.yml`, `tools/smoke_packaged_desktop.py`,
+  `tests/test_packaged_desktop_smoke.py`, `docs/README.md`, `docs/STATUS.md`,
   `docs/architecture/system-map.md`, `docs/architecture/coverage-ledger.md`,
   `docs/review/adversarial-pass.md`,
   `docs/review/scenario-stress-test.md`,
   `docs/security/logging-audit.md`,
   `docs/unknowns/maintenance-harness.md`,
-  `docs/unknowns/remediation-pass.md`
+  `docs/unknowns/remediation-pass.md`,
+  git history for `release.yml` and `tools/smoke_packaged_desktop.py`
 - Evidence that supports the concern:
-  `pages.yml` is a real public publish control plane with `pages: write`,
-  `id-token: write`, and `actions/deploy-pages`. `release.yml` validates the
-  repo, builds release artifacts, and performs Windows install verification.
-  `tools/smoke_packaged_desktop.py` emits path-rich smoke summaries and raw
-  installer output on failure. The system map and logging audit both treat
-  release and publish as real operational boundaries.
+  `release.yml` validates the repo, builds platform artifacts, prepares
+  optional Windows signing inputs, signs payloads and installers when secrets
+  are present, performs a real Windows installer smoke run, verifies installed
+  signatures, and only then assembles the GitHub release from downloaded
+  artifacts. `tools/smoke_packaged_desktop.py` is the repo-owned smoke harness
+  behind that path, and `tests/test_packaged_desktop_smoke.py` covers the
+  NSIS preference, install-state handling, redacted receipts, uninstall
+  normalization, and cleanup policy choices. `docs/README.md` and
+  `docs/STATUS.md` also keep one boundary honest: automated smoke exists, but
+  final human fresh-install signoff still happens outside CI when promoting a
+  release candidate or public tag. The logging audit and system map both treat
+  this as a real control plane with bounded but still sensitive output.
 - Evidence still missing:
-  repo-local proof of whether `site/` is hand-maintained or generated, plus
-  repo-local proof of exact Windows installer and signing behavior beyond
-  workflow comments and smoke helpers
+  repo-local proof of exact Windows certificate-store behavior, `signtool`
+  availability and semantics on the hosted runner, installer side effects
+  beyond the recorded state file, and a sanitized end-to-end release receipt
 - Next best repo-local check:
-  inspect any remaining release or docs-publish notes and separate repo-owned
-  facts from runner- and installer-owned behavior
+  keep separating repo-owned workflow facts from signer, runner, and installer
+  behavior, then capture a sanitized Windows dry run when that environment is
+  available
 - Out-of-repo boundary that still blocks certainty:
-  GitHub Pages deploy behavior, GitHub-hosted runners, Windows certificate
-  store behavior, installer runtime state, and CI artifact retention
+  GitHub-hosted runners, Windows certificate store behavior, `signtool`,
+  installer runtime state, GitHub Releases, and CI artifact retention
 - Confidence after this pass:
-  the publish and release control planes are `verified`, but the missing
-  boundary details remain `unknown`
+  the repo-owned release control plane is `verified`, but the end-to-end
+  Windows release boundary remains `unknown`
 
-## 4. Machine-readable output escape channels
+## 5. Machine-readable output escape channels
 
 - Claim not yet proven:
   which shared channels beyond the repo bug template capture or forbid
@@ -211,7 +255,7 @@ against current repo-local proof and records what still blocks certainty.
   no longer the shell defaults. It is the handling of the explicit local
   contracts and local artifacts outside the repo.
 
-## 5. `tools/agent/*` artifact-contract boundary
+## 6. `tools/agent/*` artifact-contract boundary
 
 - Claim not yet proven:
   whether any shared channel needs a sanitized trace or contract-stamp
