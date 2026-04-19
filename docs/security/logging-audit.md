@@ -117,7 +117,6 @@ See also [docs/unknowns/logging-audit.md](../unknowns/logging-audit.md).
 
 | Area or file | Concern | Why it matters | Evidence found so far | Likely owner if known | Next best check | Risk level |
 | --- | --- | --- | --- | --- | --- | --- |
-| `gui/lib/mmo_cli_runner.mjs`, `gui/lib/rpc_process_client.mjs` | The new GUI bridge summaries still need one end-to-end runtime spot-check | The code now surfaces public candidate labels, exit or error summaries, and `stderr_present` or `stderr_lines` counts instead of raw stderr text. A failing dev-shell run should still confirm the browser never reintroduces raw subprocess text elsewhere in the stack. | Static review shows the bridge now emits allowlisted summaries, and `cd gui && npm test` covers the new redacted contract in `gui/tests/mmo_cli_runner.test.mjs` and `gui/tests/rpc_process_client.test.mjs` | GUI bridge | Run one failing render or project command in the dev shell and inspect the surfaced error text end to end | `needs runtime confirmation` |
 | `tools/smoke_packaged_desktop.py` and release workflow logs | Windows installer stdout, stderr, and log tails may contain more than paths | Static review shows full installer output is retained and printed, but the exact MSI or NSIS payload depends on the installer and runner state | The harness writes `stdout`, `stderr`, and `log_tail` into failures and path-rich JSON into success output | desktop packaging or release tooling | Run the packaged smoke harness on Windows and inspect the emitted console output and `msi-install.log` or `nsis-install.log` | `needs runtime confirmation` |
 | `tools/agent/*` trace artifacts | It is unclear whether any automation publishes `sandbox_tmp/agent_trace.ndjson` or `.mmo_agent/graph_contract.json` outside local runs | Local-only artifacts are lower risk until they are uploaded, pasted, or attached to CI or issue threads | Static review found no workflow that uploads these files, but the tool writes them by default with path-bearing fields | agent harness | Confirm whether any manual or automated workflow exports these artifacts to shared locations | `needs runtime confirmation` |
 
@@ -138,7 +137,9 @@ Sampled but not elevated:
   validator status
 - GUI bridge failure summaries that now expose public candidate labels, exit or
   error summaries, and `stderr_present` or `stderr_lines` counts instead of raw
-  subprocess stderr
+  subprocess stderr. Runtime probes against `/api/rpc` and `/api/ui-bundle`
+  now confirm the browser-visible JSON stays on those summaries even when fake
+  binaries emit path-rich stderr.
 - GUI server startup logging that only prints the localhost dev-shell URL
 - scan-session live progress logs that use `stem_id` or `session` markers
   instead of raw paths
