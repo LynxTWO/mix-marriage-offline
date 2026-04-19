@@ -10,6 +10,48 @@ small enough to review as docs-only work.
 
 ## Current protected-area batch
 
+## 13. Shell-facing `project.show` default
+
+- Exact files to change:
+  `src/mmo/cli.py`,
+  `tests/test_cli_project_show.py`,
+  `docs/review/safe-fix-plan.md`,
+  `docs/review/approval-packets.md`,
+  `docs/architecture/coverage-ledger.md`,
+  `docs/security/logging-audit.md`,
+  `docs/review/remediation-backlog.md`,
+  `docs/manual/12-projects-sessions-and-artifacts.md`
+- Why this change is safe now:
+  the focused caller audit found no in-repo browser or desktop caller for the
+  CLI default, only docs and CLI tests, and the prior batch already proved the
+  shell and RPC routes can diverge cleanly with RPC pinned to explicit `json`
+- What behavior must remain unchanged:
+  RPC `project.show` payload shape, explicit `--format json` behavior for CLI
+  project show, artifact allowlist order, deterministic output for unchanged
+  formats, and browser hydration from `absolute_path` receipts
+- Tests or checks to run:
+  `tools/run_pytest.sh -q tests/test_cli_project_show.py tests/test_cli_gui_rpc.py`,
+  `python3 tools/validate_contracts.py`,
+  one local shell `project show` default-output sample,
+  one local `mmo gui rpc` `project.show` sample,
+  `npx --yes markdownlint-cli docs/review/safe-fix-plan.md docs/review/approval-packets.md docs/architecture/coverage-ledger.md docs/security/logging-audit.md docs/review/remediation-backlog.md docs/manual/12-projects-sessions-and-artifacts.md`,
+  and `git diff --check -- src/mmo/cli.py tests/test_cli_project_show.py docs/review/safe-fix-plan.md docs/review/approval-packets.md docs/architecture/coverage-ledger.md docs/security/logging-audit.md docs/review/remediation-backlog.md docs/manual/12-projects-sessions-and-artifacts.md`
+- Docs to update:
+  `docs/review/safe-fix-plan.md`,
+  `docs/review/approval-packets.md`,
+  `docs/architecture/coverage-ledger.md`,
+  `docs/security/logging-audit.md`,
+  `docs/review/remediation-backlog.md`,
+  `docs/manual/12-projects-sessions-and-artifacts.md`
+- Rollback note:
+  restore the CLI default to `json` if a shell-facing caller proves it relied
+  on the old machine-local path contract without passing `--format json`
+- Observability note:
+  keep the browser and RPC route explicit on `json`. Do not widen this batch
+  into scan-output redaction or GUI contract changes.
+- Change type:
+  behavior-preserving code cleanup
+
 ## 12. Shell-facing `project.save` and `project.load` defaults
 
 - Exact files to change:

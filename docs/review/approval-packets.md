@@ -53,43 +53,48 @@ review. This pass does not edit application code.
   profile. Phase 3 is now implemented on this branch too: the shell-facing CLI
   default for `project save` and `project load` now uses `json-shared`, while
   RPC keeps the full local `json` default. Focused CLI and RPC tests now cover
-  both defaults and both explicit profiles.
+  both defaults and both explicit profiles. Phase 4 is now implemented on this
+  branch too: shell-facing `project show` now defaults to `json-shared`, while
+  GUI and RPC keep the explicit local `json` path contract.
 - Smallest safe edit after approval:
   completed phase 1 on this branch by adding `project show --format
   json-shared`, completed phase 2 by adding shared-log-safe save and load
   profiles, and completed phase 3 by making the shell-facing save or load CLI
-  default shared-safe while leaving RPC local. The next safe edit is still
-  separate from scan: decide whether shell-facing default `project show
-  --format json` should narrow next or whether scan output should get its own
-  boundary change.
+  default shared-safe while leaving RPC local. Phase 4 now narrows the
+  shell-facing `project show` default the same way while leaving GUI and RPC
+  local. The next safe edit is separate from project output: decide whether
+  scan output should get its own boundary change.
 - What could break:
   the GUI RPC hydration path, browser shell state, CLI callers, shell scripts,
   test fixtures, or support flows that assume the current project JSON shape.
-  The implemented phase-1, phase-2, and phase-3 changes keep the full local
-  path contract available through explicit `json` or RPC. The remaining break
-  risk sits in any future change to default `project show --format json` or
-  scan output.
+  The implemented phase-1 through phase-4 changes keep the full local path
+  contract available through explicit `json` or RPC. The remaining break risk
+  now sits mostly in scan output or any future attempt to narrow the explicit
+  local project JSON contract.
 - Verification plan:
   phase 1 ran `tools/run_pytest.sh -q tests/test_cli_project_show.py tests/test_cli_gui_rpc.py`
   and `python3 tools/validate_contracts.py`. Phases 2 and 3 ran
   `tools/run_pytest.sh -q tests/test_cli_project_load_save.py tests/test_cli_gui_rpc.py`
+  and `python3 tools/validate_contracts.py`. Phase 4 ran
+  `tools/run_pytest.sh -q tests/test_cli_project_show.py tests/test_cli_gui_rpc.py`
   and `python3 tools/validate_contracts.py`. Remaining phases should add
   `tests/test_scan_smoke.py` and `tests/test_cli_scan_lfe_audit.py` when they
   touch those contracts. The project-output work also has one local shell
   `project.show --format json-shared` sample, one local `mmo gui rpc`
-  `project.show` sample, one local shell `project save --format json-shared`
-  sample, one local shell `project load --format json-shared` sample, one
-  local shell `project save` default-output sample, and one local shell
-  `project load` default-output sample.
+  `project.show` sample, one local shell `project show` default-output sample,
+  one local shell `project save --format json-shared` sample, one local shell
+  `project load --format json-shared` sample, one local shell `project save`
+  default-output sample, and one local shell `project load` default-output
+  sample.
 - Rollback plan:
-  phases 1 through 3 can revert the shared-safe profiles or the CLI default
+  phases 1 through 4 can revert the shared-safe profiles or the CLI defaults
   without changing the existing RPC contract. Leave scan untouched unless a
   later approved packet lands.
 - What human decision is required:
-  phases 1 through 3 are complete. The next approval decision is whether the
-  repo should stop at the current project-output boundary, or begin phase 4 on
-  shell-facing default `project show --format json`. Scan should stay on a
-  later packet until the shared-channel proof is stronger.
+  phases 1 through 4 are complete. The next approval decision is whether the
+  repo should stop at the current project-output boundary, or begin the scan
+  output packet. Scan should stay on a separate packet until the shared-channel
+  proof is strong enough for a bounded change.
 - Which unknowns still block the edit, if any:
   `docs/unknowns/remediation-pass.md` and
   `docs/unknowns/evidence-gap-pass.md` still record missing proof about

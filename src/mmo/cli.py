@@ -2707,11 +2707,11 @@ def main(argv: list[str] | None = None) -> int:
     project_show_parser.add_argument(
         "--format",
         choices=["json", "json-shared", "text"],
-        default="json",
+        default="json-shared",
         help=(
             "Output format for project show output. "
-            "'json' keeps local machine paths for GUI and RPC consumers. "
-            "'json-shared' drops machine-local path fields for shared logs."
+            "'json-shared' drops machine-local path fields for shell use. "
+            "Use 'json' when local tooling needs the full GUI or RPC path contract."
         ),
     )
 

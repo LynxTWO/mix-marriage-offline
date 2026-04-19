@@ -164,6 +164,18 @@ class TestProjectShowJSON(unittest.TestCase):
         )
         self.assertEqual(stdout_a, stdout_b)
 
+    def test_project_show_defaults_to_shared_json(self) -> None:
+        exit_code, stdout, stderr = _run_main(["project", "show", str(self.project_dir)])
+        self.assertEqual(exit_code, 0, msg=stderr)
+        payload = json.loads(stdout)
+
+        self.assertNotIn("project_dir", payload)
+        self.assertTrue(payload["paths_redacted"])
+        by_path = _artifact_rows_by_path(payload)
+        self.assertIn("stems/stems_index.json", by_path)
+        self.assertNotIn("absolute_path", by_path["stems/stems_index.json"])
+        self.assertNotIn(self.project_dir.resolve().as_posix(), stdout)
+
 
 class TestProjectShowNoScanning(unittest.TestCase):
     @classmethod

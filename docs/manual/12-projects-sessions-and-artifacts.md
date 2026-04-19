@@ -15,11 +15,9 @@ Shell use now defaults to the shared-safe session summary. Use `--format json`
 only when local tooling truly needs full machine-local paths in the save or
 load output.
 
-Project metadata. Use mmo project show ./project --format json for local
-tooling that needs the full allowlisted path receipts. If you need to paste
-project state into an issue or shared log, use mmo project show ./project
---format json-shared first. That keeps the deterministic artifact summary and
-drops machine-local path fields.
+Project metadata. Shell use now defaults to the shared-safe project summary.
+Use mmo project show ./project --format json only when local tooling needs the
+full allowlisted path receipts and artifact `absolute_path` fields.
 
 Bundles. A ui_bundle.json is a “pointer payload” that the GUI can consume. You
 can build one from a report plus optional artifacts: mmo bundle --report
