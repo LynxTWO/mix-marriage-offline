@@ -10,6 +10,42 @@ small enough to review as docs-only work.
 
 ## Current protected-area batch
 
+## 10. Project session receipt allowlist trim
+
+- Exact files to change:
+  `src/mmo/core/config.py`,
+  `tests/test_project_session.py`,
+  `docs/review/safe-fix-plan.md`
+- Why this change is safe now:
+  the current project render wrapper writes scaffold receipts under
+  `renders/`, the system map and user docs already describe the current
+  scaffold names, and the only in-repo references to the old dotted
+  safe-render receipt names are fallback labels outside the project-session
+  save or load flow
+- What behavior must remain unchanged:
+  session schema version, default `project_session.json` path, `--force`
+  overwrite rules, current `renders/` receipt capture, and project-session
+  load semantics for already-saved session files
+- Tests or checks to run:
+  `tools/run_pytest.sh -q tests/test_project_session.py tests/test_cli_project_load_save.py`,
+  `python3 tools/validate_contracts.py`,
+  `npx --yes markdownlint-cli docs/review/safe-fix-plan.md`,
+  and `git diff --check -- src/mmo/core/config.py tests/test_project_session.py docs/review/safe-fix-plan.md`
+- Docs to update:
+  `docs/review/safe-fix-plan.md`
+- Rollback note:
+  restore the dotted receipt names to `_PROJECT_DEFAULT_RECEIPT_PATHS` if a
+  current project flow proves it still writes those root-level artifacts and
+  expects session export to preserve them
+- Observability note:
+  none; this is a session-export contract trim, not a log or telemetry change
+- Change type:
+  behavior-preserving code cleanup
+- Compatibility trim note:
+  this batch intentionally removes dead compatibility baggage from session
+  export instead of preserving legacy dotted safe-render receipt names that the
+  current project scaffold no longer writes
+
 ## 9. Safe-render live-progress `where` redaction
 
 - Exact files to change:

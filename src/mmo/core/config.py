@@ -23,9 +23,10 @@ _PROJECT_SESSION_RECEIPT_KEYS = {"path", "payload"}
 
 _PROJECT_SCENE_REL_PATH = Path("drafts/scene.draft.json")
 _PROJECT_HISTORY_REL_PATH = Path("renders/event_log.jsonl")
+# Session export only follows the current scaffold receipt paths. Legacy dotted
+# safe-render receipts are no longer produced by project flows, so keeping them
+# here would silently preserve dead compatibility baggage in future sessions.
 _PROJECT_DEFAULT_RECEIPT_PATHS: tuple[Path, ...] = (
-    Path("safe_render.dry_receipt.json"),
-    Path("safe_render.receipt.json"),
     Path("renders/render_execute.json"),
     Path("renders/render_preflight.json"),
     Path("renders/render_qa.json"),

@@ -105,6 +105,45 @@ class TestProjectSession(unittest.TestCase):
             self.assertEqual(self._read_jsonl(history_path), history_payload)
             self.assertEqual(json.loads(receipt_path.read_text(encoding="utf-8")), receipt_payload)
 
+    def test_save_ignores_legacy_root_safe_render_receipts(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project_dir = Path(temp_dir) / "project"
+            scene_path = project_dir / "drafts" / "scene.draft.json"
+            history_path = project_dir / "renders" / "event_log.jsonl"
+            receipt_path = project_dir / "renders" / "render_preflight.json"
+            legacy_receipt_path = project_dir / "safe_render.receipt.json"
+            legacy_dry_receipt_path = project_dir / "safe_render.dry_receipt.json"
+
+            scene_payload = {
+                "schema_version": "0.1.0",
+                "scene_id": "SCENE.DRAFT.TEST",
+            }
+            history_payload = [{"event_id": "EVENT.1", "kind": "info"}]
+            receipt_payload = {
+                "schema_version": "0.1.0",
+                "checks": [],
+                "issues": [],
+            }
+
+            self._write_json(scene_path, scene_payload)
+            history_path.parent.mkdir(parents=True, exist_ok=True)
+            history_path.write_text(
+                "".join(json.dumps(item, sort_keys=True) + "\n" for item in history_payload),
+                encoding="utf-8",
+            )
+            self._write_json(receipt_path, receipt_payload)
+            self._write_json(legacy_receipt_path, {"legacy": True})
+            self._write_json(legacy_dry_receipt_path, {"legacy": True})
+
+            save_result = save_project_session(project_dir, session_path=None, force=False)
+            self.assertTrue(save_result["ok"])
+
+            session_payload = load_project_session(project_dir / "project_session.json")
+            self.assertEqual(
+                session_payload["receipts"],
+                [{"path": "renders/render_preflight.json", "payload": receipt_payload}],
+            )
+
 
 if __name__ == "__main__":
     unittest.main()
