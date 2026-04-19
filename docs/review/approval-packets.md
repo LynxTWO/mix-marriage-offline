@@ -9,43 +9,72 @@ review. This pass does not edit application code.
 
 - Exact area and files:
   `src/mmo/cli_commands/_project.py`,
+  `src/mmo/cli_commands/_gui_rpc.py`,
+  `gui/server.mjs`,
+  `gui/web/app.js`,
   `src/mmo/tools/scan_session.py`,
+  `src/mmo/cli_commands/_analysis.py`,
+  `src/mmo/tools/analyze_stems.py`,
+  `src/mmo/core/variants.py`,
   `src/mmo/core/session.py`,
   `src/mmo/core/media_tags.py`
 - Protected-area category:
-  local project and session control-plane output boundary with artifact and
-  state reach
+  local project and session control-plane output boundary with GUI RPC,
+  artifact, and state reach
 - Why the risk matters:
   `project show`, `project save`, `project load`, and scan output emit
   machine-readable data that includes absolute project paths, session paths,
-  stem paths, hashes, and media-tag-derived content. Those are local product
-  outputs, but they become telemetry when wrappers, CI, or support capture
-  stdout.
+  stem paths, hashes, and media-tag-derived content. The new evidence shows
+  `project.show` is not only shell output. The GUI RPC path parses that JSON
+  and sends it to the local browser shell. The scan path is different. Its
+  data class is still high risk, but most repo-owned consumers keep it
+  file-backed or in memory instead of surfacing raw JSON stdout to the browser.
 - Current evidence:
   `docs/security/logging-audit.md` marked the project and scan output surfaces
-  as sensitive and approval-gated. The output-boundary evidence pass confirmed
-  that `_project.py` prints `project_dir` and per-artifact `absolute_path`, and
-  `scan_session.py` emits path-bearing JSON and stderr progress.
+  as sensitive and approval-gated. The refreshed evidence pass confirmed that
+  `_project.py` prints `project_dir` and per-artifact `absolute_path`.
+  `_gui_rpc.py`, `gui/server.mjs`, and `gui/web/app.js` prove a real local
+  browser-visible `project.show` consumer, and `docs/13-gui-handshake.md`
+  documents that flow. `scan_session.py` still emits path-bearing JSON and
+  stderr progress, but `_analysis.py`, `analyze_stems.py`, `variants.py`,
+  `docs/user_guide.md`, and `docs/manual/04-the-main-workflows.md` show the
+  normal repo-owned scan path is `--out` file output, direct module use, or
+  in-memory test parsing. `.github/ISSUE_TEMPLATE/bug_report.yml` is one
+  repo-owned shared channel because it asks for exact commands, artifact paths,
+  and machine-readable behavior while also requiring scrubbing of private
+  paths. Workflow inspection found no repo-owned upload path for project JSON,
+  scan JSON, or agent trace artifacts.
 - Smallest safe edit after approval:
-  start with one output family and split machine-readable local output from a
-  shared-log-safe summary surface before touching every JSON-emitting command
+  do not batch project and scan together. Start with the `project.show`
+  family, because it has a verified GUI RPC and browser consumer. Preserve the
+  local machine-readable contract where the GUI needs it, and add a separate
+  shared-log-safe summary surface or explicit local-only flag before touching
+  scan output. Keep `scan_session.py` unchanged until a later packet narrows
+  its required shared channels more clearly.
 - What could break:
-  CLI callers, shell scripts, test fixtures, or support flows that assume the
-  current JSON shape
+  the GUI RPC hydration path, browser shell state, CLI callers, shell scripts,
+  test fixtures, or support flows that assume the current project JSON shape.
+  A wider batch could also break scan wrappers that currently rely on file
+  output or in-memory parsing.
 - Verification plan:
-  `tools/run_pytest.sh -q tests/test_cli_project_load_save.py tests/test_cli_project_show.py tests/test_scan_smoke.py tests/test_cli_scan_lfe_audit.py`
-  and `python3 tools/validate_contracts.py`, plus review of a captured stdout
-  sample after the change
+  `tools/run_pytest.sh -q tests/test_cli_project_load_save.py tests/test_cli_project_show.py tests/test_cli_gui_rpc.py tests/test_scan_smoke.py tests/test_cli_scan_lfe_audit.py`
+  and `python3 tools/validate_contracts.py`, plus one local dev-shell
+  `project.show` spot-check and review of a captured stdout sample after the
+  change
 - Rollback plan:
-  revert the output-contract change and restore the prior JSON shape if callers
-  or fixtures break
+  revert the project-output contract change and restore the prior JSON shape if
+  GUI hydration, RPC callers, fixtures, or shell consumers break. Leave scan
+  untouched unless a later approved packet lands.
 - What human decision is required:
-  approve whether the repo should introduce a split between machine-readable
-  local output and shared-log-safe output, and whether a compatibility flag or
-  phased rollout is needed
+  approve whether the repo should split this packet into phases, with
+  `project.show` first and scan later. Approve whether the local GUI and RPC
+  path keeps the full machine-readable payload while shell or support-facing
+  surfaces move to a reduced summary. Approve whether scan stays on a later
+  packet until the shared-channel proof is stronger.
 - Which unknowns still block the edit, if any:
-  `docs/unknowns/remediation-pass.md` still records missing proof about which
-  shared channels capture or forbid these outputs
+  `docs/unknowns/remediation-pass.md` and
+  `docs/unknowns/evidence-gap-pass.md` still record missing proof about
+  out-of-repo support, CI log, and issue-thread habits for these outputs
 
 ## 2. GUI stderr forwarding (implemented on this branch)
 
