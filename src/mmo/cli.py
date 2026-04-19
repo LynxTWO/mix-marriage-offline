@@ -235,12 +235,14 @@ def main(argv: list[str] | None = None) -> int:
     )
     scan_parser.add_argument(
         "--format",
-        choices=["json", "json-shared"],
+        choices=["json-local", "json-shared"],
         default="json-shared",
         help=(
             "Output format for stdout JSON. "
             "'json-shared' drops machine-local path anchors, hashes, and "
             "source tags for shell use. "
+            "Use 'json-local' when local tooling needs the full path-bearing "
+            "shell contract. "
             "File output under --out stays on the full local report contract."
         ),
     )

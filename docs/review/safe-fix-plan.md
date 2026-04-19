@@ -10,6 +10,62 @@ small enough to review as docs-only work.
 
 ## Current protected-area batch
 
+## 18. Scan CLI explicit-local format rename
+
+- Exact files to change:
+  `src/mmo/cli.py`,
+  `src/mmo/tools/scan_session.py`,
+  `src/mmo/cli_commands/_project.py`,
+  `tests/test_scan_smoke.py`,
+  `docs/review/safe-fix-plan.md`,
+  `docs/review/approval-packets.md`,
+  `docs/security/logging-audit.md`,
+  `docs/review/remediation-backlog.md`,
+  `docs/unknowns/remediation-pass.md`,
+  `docs/unknowns/evidence-gap-pass.md`,
+  `docs/manual/04-the-main-workflows.md`,
+  `docs/user_guide.md`
+- Why this change is safe now:
+  shell-facing scan stdout already defaults to `json-shared`, and the repo
+  caller audit still points at `--out`, direct module use, or in-memory test
+  parsing instead of a repo-owned browser, CI, or release consumer for the
+  explicit full-local stdout spelling. Renaming that shell-only profile to
+  `json-local` makes the boundary match the project commands without changing
+  the actual local report payload or the file-backed `--out` contract.
+- What behavior must remain unchanged:
+  full report JSON written under `--out`; the payload shape emitted by the
+  explicit full-local scan stdout mode; `--dry-run` and `--summary` text
+  output; `build_report()` payload shape for in-memory callers;
+  `analyze_stems.py` file-backed handoff; and project-build GUI scan handoff
+  through the full local report file
+- Tests or checks to run:
+  `tools/run_pytest.sh -q tests/test_scan_smoke.py tests/test_validation_wav_codec.py tests/test_scan_ffmpeg_basic.py tests/test_scan_ffprobe_layout.py tests/test_scan_truth_weighting_multiformat.py tests/test_truth_meters_optional_deps.py tests/test_cli_scan_lfe_audit.py tests/test_cli_project_build_gui.py`,
+  `python3 tools/validate_contracts.py`,
+  one local shell `mmo scan` default-output sample,
+  one local shell `mmo scan --format json-local` sample,
+  `npx --yes markdownlint-cli docs/review/safe-fix-plan.md docs/review/approval-packets.md docs/security/logging-audit.md docs/review/remediation-backlog.md docs/unknowns/remediation-pass.md docs/unknowns/evidence-gap-pass.md docs/manual/04-the-main-workflows.md docs/user_guide.md`,
+  and `git diff --check -- src/mmo/cli.py src/mmo/tools/scan_session.py src/mmo/cli_commands/_project.py tests/test_scan_smoke.py docs/review/safe-fix-plan.md docs/review/approval-packets.md docs/security/logging-audit.md docs/review/remediation-backlog.md docs/unknowns/remediation-pass.md docs/unknowns/evidence-gap-pass.md docs/manual/04-the-main-workflows.md docs/user_guide.md`
+- Docs to update:
+  `docs/review/safe-fix-plan.md`,
+  `docs/review/approval-packets.md`,
+  `docs/security/logging-audit.md`,
+  `docs/review/remediation-backlog.md`,
+  `docs/unknowns/remediation-pass.md`,
+  `docs/unknowns/evidence-gap-pass.md`,
+  `docs/manual/04-the-main-workflows.md`,
+  `docs/user_guide.md`
+- Rollback note:
+  restore the shell spelling to `json` only if a real shell caller proves it
+  depended on that exact flag name and cannot move to `json-local`
+- Observability note:
+  keep the full report payload unchanged. This is a shell-contract naming
+  cleanup, not a logging or report-shape change.
+- Change type:
+  behavior-preserving code cleanup
+- Compatibility trim note:
+  this batch trims an ambiguous shell-facing scan format name now that the repo
+  already defaults stdout to the shared-safe profile
+
 ## 17. Project CLI explicit-local format rename
 
 - Exact files to change:
@@ -172,7 +228,8 @@ small enough to review as docs-only work.
   while normal repo-owned scan flows already use `--out`, direct module calls,
   or in-memory handling.
 - What behavior must remain unchanged:
-  full report JSON written under `--out`, explicit `--format json` behavior,
+  full report JSON written under `--out`, explicit `--format json-local`
+  behavior,
   `--dry-run` and `--summary` text output, `build_report()` payload shape for
   in-memory callers, `analyze_stems.py` file-backed handoff, and project build
   GUI scan handoff through the full local report file
@@ -180,7 +237,7 @@ small enough to review as docs-only work.
   `tools/run_pytest.sh -q tests/test_scan_smoke.py tests/test_validation_wav_codec.py tests/test_scan_ffmpeg_basic.py tests/test_scan_ffprobe_layout.py tests/test_scan_truth_weighting_multiformat.py tests/test_truth_meters_optional_deps.py tests/test_cli_scan_lfe_audit.py tests/test_cli_project_build_gui.py`,
   `python3 tools/validate_contracts.py`,
   one local shell `mmo scan` shared-safe sample,
-  one local shell `mmo scan --format json` sample,
+  one local shell `mmo scan --format json-local` sample,
   `npx --yes markdownlint-cli docs/review/safe-fix-plan.md docs/review/approval-packets.md docs/architecture/coverage-ledger.md docs/security/logging-audit.md docs/review/remediation-backlog.md docs/unknowns/remediation-pass.md docs/review/evidence-gap-check.md docs/unknowns/evidence-gap-pass.md docs/user_guide.md docs/manual/04-the-main-workflows.md`,
   and `git diff --check -- src/mmo/tools/scan_session.py src/mmo/cli.py src/mmo/cli_commands/_analysis.py src/mmo/cli_commands/_project.py tests/test_scan_smoke.py tests/test_validation_wav_codec.py docs/review/safe-fix-plan.md docs/review/approval-packets.md docs/architecture/coverage-ledger.md docs/security/logging-audit.md docs/review/remediation-backlog.md docs/unknowns/remediation-pass.md docs/review/evidence-gap-check.md docs/unknowns/evidence-gap-pass.md docs/user_guide.md docs/manual/04-the-main-workflows.md`
 - Docs to update:
@@ -195,12 +252,12 @@ small enough to review as docs-only work.
   `docs/user_guide.md`,
   `docs/manual/04-the-main-workflows.md`
 - Rollback note:
-  restore the scan stdout default to `json` if a shell-facing caller proves it
-  relied on the old machine-local contract without passing `--format json`
+  restore the old `json` spelling only if a real shell caller proves it
+  depended on that exact flag name and cannot move to `json-local`
 - Observability note:
-  keep the full report contract on `--out` and explicit `--format json`. Do
-  not widen this batch into `analyze_stems.py`, file-backed report redaction,
-  or agent-trace hardening.
+  keep the full report contract on `--out` and explicit `--format json-local`.
+  Do not widen this batch into `analyze_stems.py`, file-backed report
+  redaction, or agent-trace hardening.
 - Change type:
   behavior-preserving code cleanup
 

@@ -30,7 +30,7 @@ class TestScanSessionSmoke(unittest.TestCase):
                     "--schema",
                     os.fspath(schema_path),
                     "--format",
-                    "json",
+                    "json-local",
                     "--meters",
                     "basic",
                     "--peak",

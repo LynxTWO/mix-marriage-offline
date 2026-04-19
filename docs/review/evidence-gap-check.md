@@ -239,7 +239,7 @@ against current repo-local proof and records what still blocks certainty.
   artifacts.
 - Evidence still missing:
   repo-local proof of whether support transcripts, maintainer issue replies, CI
-  logs, or other out-of-repo habits capture the explicit local `json`,
+  logs, or other out-of-repo habits capture the explicit local `json-local`,
   file-backed scan reports, or agent artifacts in practice, plus any explicit
   rule that forbids pasting raw local JSON into shared channels
 - Next best repo-local check:

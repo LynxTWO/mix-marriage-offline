@@ -60,10 +60,16 @@ review. This pass does not edit application code.
   GUI and RPC keep the explicit local `json` path contract. Phase 5 is now
   implemented on this branch too: `scan_session` and `mmo scan` now support
   `--format json-shared`, shell stdout defaults to the shared-safe profile,
-  and `--out` plus explicit `--format json` keep the full local report
+  and `--out` plus explicit `--format json-local` keep the full local report
   contract. Phase 6 is now implemented on this branch too: shell-facing
   `project show`, `project save`, and `project load` now spell the full local
   contract as `json-local`, while GUI and RPC keep the local `json` spelling.
+  Phase 7 is now implemented on this branch too: shell-facing scan stdout now
+  spells the full local contract as `json-local`, while file-backed `--out`
+  still keeps the same full local report payload. The only repo-local runtime
+  caller that needed the spelling update was `project.build_gui`, and that
+  path still reads the file-backed scan report through `scan_out` rather than
+  scan stdout.
 - Smallest safe edit after approval:
   completed phase 1 on this branch by adding `project show --format
   json-shared`, completed phase 2 by adding shared-log-safe save and load
@@ -71,9 +77,12 @@ review. This pass does not edit application code.
   default shared-safe while leaving RPC local. Phase 4 now narrows the
   shell-facing `project show` default the same way while leaving GUI and RPC
   local. Phase 5 adds the same shell-safe split for scan stdout while leaving
-  file-backed `--out` reports and explicit `--format json` local. Phase 6
-  then renamed the shell-only full local project profile to `json-local`
-  while leaving GUI and RPC on `json`. The next safe edit is now narrower than
+  file-backed `--out` reports and explicit `--format json-local` local.
+  Phase 6 then renamed the shell-only full local project profile to
+  `json-local`
+  while leaving GUI and RPC on `json`. Phase 7 then renamed the shell-only
+  full local scan profile to `json-local` while leaving the file-backed scan
+  contract unchanged. The next safe edit is now narrower than
   this
   packet: decide whether the explicit local project or scan contracts should
   narrow further, or stay documented as intentional local-only paths.
@@ -82,10 +91,10 @@ review. This pass does not edit application code.
   test fixtures, or support flows that assume the current project JSON shape.
   The implemented phase-1 through phase-4 changes keep the full local project
   path contract available through explicit `json-local` on the shell side and
-  `json` on the GUI or RPC side. Phase 5 keeps the full scan report contract
-  on `--out` and explicit `--format json`, so the main break risk now sits in
-  shell callers that assumed raw scan stdout by default, or in any future
-  attempt to narrow the explicit local contracts.
+  `json` on the GUI or RPC side. Phases 5 and 7 keep the full scan report
+  contract on `--out` and explicit `--format json-local`, so the main break
+  risk now sits in shell callers that assumed the old `json` spelling, or in
+  any future attempt to narrow the explicit local contracts.
 - Verification plan:
   phase 1 ran `tools/run_pytest.sh -q tests/test_cli_project_show.py tests/test_cli_gui_rpc.py`
   and `python3 tools/validate_contracts.py`. Phases 2 and 3 ran
@@ -104,16 +113,15 @@ review. This pass does not edit application code.
   one local shell `project save --format json-local` sample, and one local
   shell `project load --format json-local` sample,
   one local shell `mmo scan` default-output sample, and one local shell
-  `mmo scan --format json` sample.
+  `mmo scan --format json-local` sample.
 - Rollback plan:
-  phases 1 through 6 can revert the shared-safe profiles, the CLI defaults,
-  or the shell-only `json-local` rename without changing the existing RPC
+  phases 1 through 7 can revert the shared-safe profiles, the CLI defaults,
+  or the shell-only `json-local` renames without changing the existing RPC
   contract or the file-backed scan contract.
 - What human decision is required:
-  phases 1 through 6 are complete. The next approval decision is whether the
+  phases 1 through 7 are complete. The next approval decision is whether the
   repo should stop at the current shell boundary, or start a narrower packet
-  for the explicit local `json-local` project path and explicit local scan
-  `json` path.
+  for the explicit local `json-local` project and scan paths.
 - Which unknowns still block the edit, if any:
   `docs/unknowns/remediation-pass.md` and
   `docs/unknowns/evidence-gap-pass.md` still record missing proof about
