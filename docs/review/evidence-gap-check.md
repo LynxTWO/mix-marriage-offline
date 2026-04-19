@@ -18,6 +18,7 @@ against current repo-local proof and records what still blocks certainty.
   `docs/00-quickstart.md`, `docs/21-loudness-profiles.md`, `CLAUDE.md`,
   `docs/contributing/ai-workflow.md`,
   `tools/validate_packaged_data_mirror.py`,
+  git history for the three scripts and their nearby docs or validator paths,
   `docs/architecture/coverage-ledger.md`, `docs/review/adversarial-pass.md`,
   `docs/review/scenario-stress-test.md`,
   `docs/unknowns/adversarial-pass.md`,
@@ -39,20 +40,26 @@ against current repo-local proof and records what still blocks certainty.
   `sync_claude_agents.py`. CI and release still do not run any of the three
   scripts directly, but `sync_packaged_data_mirror.py` is enforced indirectly
   because `validate_contracts.py` runs `PKG.MIRROR` in CI and release.
+  Git history now reinforces that split: `safe_cleanup.py` was introduced and
+  later hardened through maintainer-facing docs and tests, not workflow hooks;
+  `sync_packaged_data_mirror.py` was introduced beside `PKG.MIRROR` validation
+  and later maintainer docs, which proves indirect enforcement rather than
+  hidden execution of the sync itself; and `sync_claude_agents.py` was added as
+  a local contributor convenience sync, not as CI or release automation.
 - Evidence still missing:
-  repo-local proof of whether any hidden setup wrapper, onboarding checklist,
-  or release prep routine runs these scripts automatically instead of as
-  documented human steps
+  repo-local proof of any bootstrap or wrapper outside the recorded docs and
+  history, because the repo cannot prove the absence of out-of-repo maintainer
+  habits
 - Next best repo-local check:
-  inspect script history and any bootstrap or setup notes for evidence of an
-  automated wrapper before broadening the support-tool slice again
+  treat the scripts as human-run maintainer tools unless a future bootstrap
+  note, setup helper, or workflow starts calling them directly
 - Out-of-repo boundary that still blocks certainty:
   maintainer habits or local bootstrap routines that are not written down in
   the repo
 - Confidence after this pass:
   side effects are `verified`, the documented human audience is now `verified`
-  for all three scripts, and the remaining gap is hidden automation or
-  unwritten maintainer practice
+  for all three scripts, git history also supports that human-run audience, and
+  the remaining gap is hidden automation or unwritten maintainer practice
 
 ## 2. Helper-entrypoint audience and trusted-evidence role
 
@@ -65,6 +72,7 @@ against current repo-local proof and records what still blocks certainty.
   `tools/capture_tauri_screenshots.py`, `.github/workflows/ci.yml`,
   `docs/manual/assets/screenshots/README.md`,
   `gui/desktop-tauri/tests/capture-screenshots.spec.ts`,
+  git history for the three helpers and their nearby tests or workflow notes,
   `docs/architecture/coverage-ledger.md`,
   `docs/review/adversarial-pass.md`,
   `docs/review/scenario-stress-test.md`,
@@ -81,20 +89,26 @@ against current repo-local proof and records what still blocks certainty.
   has two real audiences: `.github/workflows/ci.yml` regenerates screenshots
   and uploads them as review artifacts, and
   `docs/manual/assets/screenshots/README.md` documents it as the maintainer
-  refresh path for committed baselines.
+  refresh path for committed baselines. Git history now narrows the remaining
+  two helpers further: `run_renderers.py` came from an internal pipeline helper
+  lineage and still looks like a maintainer-local renderer or manifest tool,
+  while `benchmark_render_precision.py` came in as part of a DSP feature bring
+  up and still looks like a maintainer-local benchmark helper. Neither history
+  trail proves a CI, release, or trusted review-evidence role.
 - Evidence still missing:
-  repo-local proof of intended audience, ownership, and evidence role for
-  `run_renderers.py` and `benchmark_render_precision.py`
+  repo-local proof that `run_renderers.py` or
+  `benchmark_render_precision.py` should be treated as anything broader than
+  maintainer-local helpers
 - Next best repo-local check:
-  keep `capture_tauri_screenshots.py` on the trusted-evidence side, then trace
-  `run_renderers.py` and `benchmark_render_precision.py` through any remaining
-  workflow files, README notes, and benchmark docs
+  keep `capture_tauri_screenshots.py` on the trusted-evidence side and treat
+  the other two helpers as maintainer-local unless a future README, workflow,
+  or benchmark note promotes them into a named review surface
 - Out-of-repo boundary that still blocks certainty:
   maintainer practice outside the repo for the renderer and benchmark helpers
 - Confidence after this pass:
   helper side effects are `verified`, screenshot-helper audience and evidence
-  role are `verified`, and the remaining unknown is limited to
-  `run_renderers.py` and `benchmark_render_precision.py`
+  role are `verified`, git history supports a maintainer-local role for the
+  remaining two helpers, and a broader trusted-evidence role remains `unknown`
 
 ## 3. Public publish and Windows release boundaries
 
