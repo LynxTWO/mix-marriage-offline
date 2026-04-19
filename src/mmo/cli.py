@@ -234,6 +234,17 @@ def main(argv: list[str] | None = None) -> int:
         help="Print a human-readable summary of the scan to stdout.",
     )
     scan_parser.add_argument(
+        "--format",
+        choices=["json", "json-shared"],
+        default="json-shared",
+        help=(
+            "Output format for stdout JSON. "
+            "'json-shared' drops machine-local path anchors, hashes, and "
+            "source tags for shell use. "
+            "File output under --out stays on the full local report contract."
+        ),
+    )
+    scan_parser.add_argument(
         "--meters",
         choices=["basic", "truth"],
         default=None,
@@ -4543,6 +4554,7 @@ def main(argv: list[str] | None = None) -> int:
             out_path,
             args.meters,
             args.peak,
+            args.format,
             strict=args.strict,
             dry_run=args.dry_run,
             summary=args.summary,

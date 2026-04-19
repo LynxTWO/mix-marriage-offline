@@ -10,6 +10,63 @@ small enough to review as docs-only work.
 
 ## Current protected-area batch
 
+## 14. Shell-facing scan stdout shared-safe profile and default
+
+- Exact files to change:
+  `src/mmo/tools/scan_session.py`,
+  `src/mmo/cli.py`,
+  `src/mmo/cli_commands/_analysis.py`,
+  `src/mmo/cli_commands/_project.py`,
+  `tests/test_scan_smoke.py`,
+  `tests/test_validation_wav_codec.py`,
+  `docs/review/safe-fix-plan.md`,
+  `docs/review/approval-packets.md`,
+  `docs/architecture/coverage-ledger.md`,
+  `docs/security/logging-audit.md`,
+  `docs/review/remediation-backlog.md`,
+  `docs/unknowns/remediation-pass.md`,
+  `docs/review/evidence-gap-check.md`,
+  `docs/unknowns/evidence-gap-pass.md`,
+  `docs/user_guide.md`,
+  `docs/manual/04-the-main-workflows.md`
+- Why this change is safe now:
+  the focused caller audit found no repo-owned GUI, browser, CI, or release
+  consumer for raw scan stdout. Direct stdout pressure is almost entirely tests,
+  while normal repo-owned scan flows already use `--out`, direct module calls,
+  or in-memory handling.
+- What behavior must remain unchanged:
+  full report JSON written under `--out`, explicit `--format json` behavior,
+  `--dry-run` and `--summary` text output, `build_report()` payload shape for
+  in-memory callers, `analyze_stems.py` file-backed handoff, and project build
+  GUI scan handoff through the full local report file
+- Tests or checks to run:
+  `tools/run_pytest.sh -q tests/test_scan_smoke.py tests/test_validation_wav_codec.py tests/test_scan_ffmpeg_basic.py tests/test_scan_ffprobe_layout.py tests/test_scan_truth_weighting_multiformat.py tests/test_truth_meters_optional_deps.py tests/test_cli_scan_lfe_audit.py tests/test_cli_project_build_gui.py`,
+  `python3 tools/validate_contracts.py`,
+  one local shell `mmo scan` shared-safe sample,
+  one local shell `mmo scan --format json` sample,
+  `npx --yes markdownlint-cli docs/review/safe-fix-plan.md docs/review/approval-packets.md docs/architecture/coverage-ledger.md docs/security/logging-audit.md docs/review/remediation-backlog.md docs/unknowns/remediation-pass.md docs/review/evidence-gap-check.md docs/unknowns/evidence-gap-pass.md docs/user_guide.md docs/manual/04-the-main-workflows.md`,
+  and `git diff --check -- src/mmo/tools/scan_session.py src/mmo/cli.py src/mmo/cli_commands/_analysis.py src/mmo/cli_commands/_project.py tests/test_scan_smoke.py tests/test_validation_wav_codec.py docs/review/safe-fix-plan.md docs/review/approval-packets.md docs/architecture/coverage-ledger.md docs/security/logging-audit.md docs/review/remediation-backlog.md docs/unknowns/remediation-pass.md docs/review/evidence-gap-check.md docs/unknowns/evidence-gap-pass.md docs/user_guide.md docs/manual/04-the-main-workflows.md`
+- Docs to update:
+  `docs/review/safe-fix-plan.md`,
+  `docs/review/approval-packets.md`,
+  `docs/architecture/coverage-ledger.md`,
+  `docs/security/logging-audit.md`,
+  `docs/review/remediation-backlog.md`,
+  `docs/unknowns/remediation-pass.md`,
+  `docs/review/evidence-gap-check.md`,
+  `docs/unknowns/evidence-gap-pass.md`,
+  `docs/user_guide.md`,
+  `docs/manual/04-the-main-workflows.md`
+- Rollback note:
+  restore the scan stdout default to `json` if a shell-facing caller proves it
+  relied on the old machine-local contract without passing `--format json`
+- Observability note:
+  keep the full report contract on `--out` and explicit `--format json`. Do
+  not widen this batch into `analyze_stems.py`, file-backed report redaction,
+  or agent-trace hardening.
+- Change type:
+  behavior-preserving code cleanup
+
 ## 13. Shell-facing `project.show` default
 
 - Exact files to change:

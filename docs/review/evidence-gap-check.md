@@ -139,24 +139,26 @@ against current repo-local proof and records what still blocks certainty.
   GUI RPC bridge, and `docs/13-gui-handshake.md` documents that flow. A local
   runtime spot-check now confirms the route split: `project show --format
   json-shared` omits `project_dir` and per-artifact `absolute_path`, while
-  `mmo gui rpc` still returns those fields for the same project. By contrast,
-  `scan_session.py` emits report JSON with path-bearing fields and
-  media-tag-derived content, but the normal repo wrappers use file-backed or
-  in-memory handling: `_analysis.py` shells out with `--out`,
-  `analyze_stems.py` always writes a scan report to disk, `variants.py` loads
-  the scan module directly, and the scan tests parse stdout in memory without
-  uploading it. `tools/agent/*` persists local NDJSON trace and contract-stamp
-  artifacts with path-bearing fields. The bug template asks reporters for exact
-  commands, exact artifact paths, and machine-readable behavior, while also
-  telling them to remove private file paths and sensitive data. That proves one
-  repo-owned manual paste channel. Workflow inspection found screenshot,
-  manual, bundle, and dist uploads, but no repo-owned upload path for project
-  JSON, scan JSON, or agent trace artifacts.
+  `mmo gui rpc` still returns those fields for the same project. `scan_session`
+  now has the same shell-split pattern: `--format json-shared` drops
+  `session.stems_dir`, per-stem hashes, source tags, and path-detail fields,
+  and shell stdout now defaults to that shared-safe profile. The normal repo
+  wrappers still keep scan output file-backed or in memory: `_analysis.py`
+  shells out with `--out`, `analyze_stems.py` always writes a scan report to
+  disk, `variants.py` loads the scan module directly, and the scan tests parse
+  stdout in memory without uploading it. `tools/agent/*` persists local NDJSON
+  trace and contract-stamp artifacts with path-bearing fields. The bug
+  template asks reporters for exact commands, exact artifact paths, and
+  machine-readable behavior, while also telling them to remove private file
+  paths and sensitive data. That proves one repo-owned manual paste channel.
+  Workflow inspection found screenshot, manual, bundle, and dist uploads, but
+  no repo-owned upload path for project JSON, scan JSON, or agent trace
+  artifacts.
 - Evidence still missing:
   repo-local proof of whether support transcripts, maintainer issue replies, CI
-  logs, or other out-of-repo habits capture these outputs in practice, plus any
-  explicit rule that forbids pasting raw project or scan JSON into shared
-  channels
+  logs, or other out-of-repo habits capture the explicit local `json`,
+  file-backed scan reports, or agent artifacts in practice, plus any explicit
+  rule that forbids pasting raw local JSON into shared channels
 - Next best repo-local check:
   inspect any remaining maintainer or support guidance in the repo, then treat
   the remaining gap as an out-of-repo workflow question instead of a missing
@@ -166,8 +168,9 @@ against current repo-local proof and records what still blocks certainty.
   outside repo-owned automation
 - Confidence after this pass:
   the path-bearing output surfaces, one manual issue-report channel, and the
-  lack of repo-owned workflow uploads are `verified`, but the full
-  escape-channel map stays `unknown`
+  lack of repo-owned workflow uploads are `verified`. The remaining unknown is
+  no longer the shell defaults. It is the handling of the explicit local
+  contracts and local artifacts outside the repo.
 
 ## 5. `tools/agent/*` artifact-contract boundary
 

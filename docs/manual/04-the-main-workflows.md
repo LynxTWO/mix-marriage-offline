@@ -13,7 +13,9 @@ recall CSV you can apply inside your DAW.
 
 Pro notes. Use `--meters basic` or `--meters truth` if you want deeper meter
 packs. Use `--summary` if you want a human-readable scan summary printed to the
-terminal.
+terminal. Bare `mmo scan` stdout now defaults to the shared-safe JSON profile.
+Use `--format json` only when local tooling needs the full local report
+contract. `--out` still writes the full file-backed report.
 
 ## Workflow B: I want “one button” artifacts in a deterministic folder
 

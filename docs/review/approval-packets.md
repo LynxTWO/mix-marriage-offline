@@ -55,50 +55,58 @@ review. This pass does not edit application code.
   RPC keeps the full local `json` default. Focused CLI and RPC tests now cover
   both defaults and both explicit profiles. Phase 4 is now implemented on this
   branch too: shell-facing `project show` now defaults to `json-shared`, while
-  GUI and RPC keep the explicit local `json` path contract.
+  GUI and RPC keep the explicit local `json` path contract. Phase 5 is now
+  implemented on this branch too: `scan_session` and `mmo scan` now support
+  `--format json-shared`, shell stdout defaults to the shared-safe profile,
+  and `--out` plus explicit `--format json` keep the full local report
+  contract.
 - Smallest safe edit after approval:
   completed phase 1 on this branch by adding `project show --format
   json-shared`, completed phase 2 by adding shared-log-safe save and load
   profiles, and completed phase 3 by making the shell-facing save or load CLI
   default shared-safe while leaving RPC local. Phase 4 now narrows the
   shell-facing `project show` default the same way while leaving GUI and RPC
-  local. The next safe edit is separate from project output: decide whether
-  scan output should get its own boundary change.
+  local. Phase 5 adds the same shell-safe split for scan stdout while leaving
+  file-backed `--out` reports and explicit `--format json` local. The next
+  safe edit is now narrower than this packet: decide whether the explicit
+  local project or scan JSON contracts should narrow further, or stay
+  documented as intentional local-only paths.
 - What could break:
   the GUI RPC hydration path, browser shell state, CLI callers, shell scripts,
   test fixtures, or support flows that assume the current project JSON shape.
   The implemented phase-1 through phase-4 changes keep the full local path
-  contract available through explicit `json` or RPC. The remaining break risk
-  now sits mostly in scan output or any future attempt to narrow the explicit
-  local project JSON contract.
+  contract available through explicit `json` or RPC. Phase 5 keeps the full
+  scan report contract on `--out` and explicit `--format json`, so the main
+  break risk now sits in shell callers that assumed raw scan stdout by
+  default, or in any future attempt to narrow the explicit local contracts.
 - Verification plan:
   phase 1 ran `tools/run_pytest.sh -q tests/test_cli_project_show.py tests/test_cli_gui_rpc.py`
   and `python3 tools/validate_contracts.py`. Phases 2 and 3 ran
   `tools/run_pytest.sh -q tests/test_cli_project_load_save.py tests/test_cli_gui_rpc.py`
   and `python3 tools/validate_contracts.py`. Phase 4 ran
   `tools/run_pytest.sh -q tests/test_cli_project_show.py tests/test_cli_gui_rpc.py`
-  and `python3 tools/validate_contracts.py`. Remaining phases should add
-  `tests/test_scan_smoke.py` and `tests/test_cli_scan_lfe_audit.py` when they
-  touch those contracts. The project-output work also has one local shell
+  and `python3 tools/validate_contracts.py`. Phase 5 ran
+  `tools/run_pytest.sh -q tests/test_scan_smoke.py tests/test_validation_wav_codec.py tests/test_scan_ffmpeg_basic.py tests/test_scan_ffprobe_layout.py tests/test_scan_truth_weighting_multiformat.py tests/test_truth_meters_optional_deps.py tests/test_cli_scan_lfe_audit.py tests/test_cli_project_build_gui.py`
+  and `python3 tools/validate_contracts.py`. The project-output work also has one local shell
   `project.show --format json-shared` sample, one local `mmo gui rpc`
   `project.show` sample, one local shell `project show` default-output sample,
   one local shell `project save --format json-shared` sample, one local shell
   `project load --format json-shared` sample, one local shell `project save`
-  default-output sample, and one local shell `project load` default-output
-  sample.
+  default-output sample, one local shell `project load` default-output sample,
+  one local shell `mmo scan` default-output sample, and one local shell
+  `mmo scan --format json` sample.
 - Rollback plan:
-  phases 1 through 4 can revert the shared-safe profiles or the CLI defaults
-  without changing the existing RPC contract. Leave scan untouched unless a
-  later approved packet lands.
+  phases 1 through 5 can revert the shared-safe profiles or the CLI defaults
+  without changing the existing RPC contract or the file-backed scan contract.
 - What human decision is required:
-  phases 1 through 4 are complete. The next approval decision is whether the
-  repo should stop at the current project-output boundary, or begin the scan
-  output packet. Scan should stay on a separate packet until the shared-channel
-  proof is strong enough for a bounded change.
+  phases 1 through 5 are complete. The next approval decision is whether the
+  repo should stop at the current shell boundary, or start a narrower packet
+  for the explicit local `json` project and scan paths.
 - Which unknowns still block the edit, if any:
   `docs/unknowns/remediation-pass.md` and
   `docs/unknowns/evidence-gap-pass.md` still record missing proof about
-  out-of-repo support, CI log, and issue-thread habits for these outputs
+  out-of-repo support, CI log, and issue-thread habits for the explicit local
+  contracts and any shared human handling of these outputs
 
 ## 2. GUI stderr forwarding (implemented on this branch)
 

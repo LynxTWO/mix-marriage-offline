@@ -1408,6 +1408,114 @@ def _render_scan_summary(report: Dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
+def _path_text_is_absolute(path_text: str) -> bool:
+    return path_text.startswith("/") or (
+        len(path_text) >= 3
+        and path_text[0].isalpha()
+        and path_text[1] == ":"
+        and path_text[2] == "/"
+    )
+
+
+def _shared_scan_path_ref(value: Any) -> str | None:
+    if not isinstance(value, str):
+        return None
+    normalized = value.replace("\\", "/").strip()
+    if not normalized:
+        return None
+    if _path_text_is_absolute(normalized):
+        return Path(normalized).name or None
+    if "/" in normalized:
+        return Path(normalized).name or None
+    return normalized
+
+
+def _shared_scan_issue_evidence(
+    issue: Dict[str, Any],
+    evidence_rows: List[Dict[str, Any]],
+) -> List[Dict[str, Any]]:
+    shared_rows: List[Dict[str, Any]] = []
+    for row in evidence_rows:
+        evidence_id = row.get("evidence_id")
+        if evidence_id == "EVID.FILE.HASH.SHA256":
+            continue
+
+        if evidence_id == "EVID.FILE.PATH":
+            shared_ref = _shared_scan_path_ref(row.get("value"))
+            if isinstance(shared_ref, str):
+                row["value"] = shared_ref
+            else:
+                target = issue.get("target")
+                if isinstance(target, dict):
+                    stem_id = target.get("stem_id")
+                    if isinstance(stem_id, str) and stem_id.strip():
+                        row["value"] = stem_id.strip()
+            shared_rows.append(row)
+            continue
+
+        if evidence_id == "EVID.FILE.NAME":
+            value = row.get("value")
+            if isinstance(value, str) and value.strip():
+                row["value"] = Path(value.strip()).name or value.strip()
+            shared_rows.append(row)
+            continue
+
+        shared_rows.append(row)
+
+    return shared_rows or evidence_rows
+
+
+def _build_shared_report_payload(report: Dict[str, Any]) -> Dict[str, Any]:
+    payload = json.loads(json.dumps(report))
+
+    session = payload.get("session")
+    if isinstance(session, dict):
+        session.pop("stems_dir", None)
+        raw_stems = session.get("stems")
+        if isinstance(raw_stems, list):
+            for stem in raw_stems:
+                if not isinstance(stem, dict):
+                    continue
+                shared_file_path = _shared_scan_path_ref(stem.get("file_path"))
+                stem["file_path"] = (
+                    shared_file_path
+                    or str(stem.get("stem_id") or "stem")
+                )
+                for field_name in (
+                    "workspace_relative_path",
+                    "source_ref",
+                    "sha256",
+                    "source_metadata",
+                    "resolved_path",
+                    "resolve_error_detail",
+                ):
+                    stem.pop(field_name, None)
+
+    raw_issues = payload.get("issues")
+    if isinstance(raw_issues, list):
+        for issue in raw_issues:
+            if not isinstance(issue, dict):
+                continue
+            if issue.get("issue_id") == "ISSUE.VALIDATION.UNKNOWN_ROLE":
+                issue["message"] = (
+                    "Stem name does not match any known role naming convention. "
+                    "Role inference will fall back to ROLE.OTHER.UNKNOWN. "
+                    "Rename the stem with recognizable role keywords to improve "
+                    "routing recommendations."
+                )
+            evidence_rows = issue.get("evidence")
+            if not isinstance(evidence_rows, list):
+                continue
+            normalized_rows = [
+                row
+                for row in evidence_rows
+                if isinstance(row, dict)
+            ]
+            issue["evidence"] = _shared_scan_issue_evidence(issue, normalized_rows)
+
+    return payload
+
+
 def build_report(
     stems_dir: Path,
     generated_at: str,
@@ -1616,6 +1724,17 @@ def main() -> int:
         )
         parser.add_argument("--out", dest="out", default=None, help="Optional output JSON path.")
         parser.add_argument(
+            "--format",
+            choices=["json", "json-shared"],
+            default="json-shared",
+            help=(
+                "Output format for stdout JSON. "
+                "'json-shared' drops machine-local path anchors, hashes, and "
+                "source tags for shell use. "
+                "File output under --out stays on the full local report contract."
+            ),
+        )
+        parser.add_argument(
             "--schema",
             dest="schema",
             default=None,
@@ -1653,13 +1772,20 @@ def main() -> int:
         if args.summary:
             print(_render_scan_summary(report))
 
-        output = json.dumps(report, indent=2)
         if args.out:
+            output = json.dumps(report, indent=2)
             out_path = Path(args.out)
             out_path.parent.mkdir(parents=True, exist_ok=True)
             out_path.write_text(output + "\n", encoding="utf-8")
         elif not args.summary:
-            # Default: print JSON to stdout (unless --summary already printed it)
+            # Default shell output should stay safe for issue threads and shared
+            # logs while the file-backed report contract stays unchanged.
+            output_payload = (
+                _build_shared_report_payload(report)
+                if args.format == "json-shared"
+                else report
+            )
+            output = json.dumps(output_payload, indent=2)
             print(output)
 
         return 0

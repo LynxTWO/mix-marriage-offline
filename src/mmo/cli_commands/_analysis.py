@@ -50,6 +50,7 @@ def _run_scan(
     out_path: "Path | None",
     meters: str | None,
     include_peak: bool,
+    output_format: str,
     *,
     strict: bool = False,
     dry_run: bool = False,
@@ -64,6 +65,8 @@ def _run_scan(
     ]
     if out_path is not None and not dry_run:
         command.extend(["--out", str(out_path)])
+    if output_format:
+        command.extend(["--format", output_format])
     if meters:
         command.extend(["--meters", meters])
     if include_peak:
