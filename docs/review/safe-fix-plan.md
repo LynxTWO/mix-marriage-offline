@@ -10,6 +10,56 @@ small enough to review as docs-only work.
 
 ## Current protected-area batch
 
+## 8. `project.show` shared-log-safe JSON profile
+
+- Exact files to change:
+  `src/mmo/cli.py`,
+  `src/mmo/cli_commands/_project.py`,
+  `tests/test_cli_project_show.py`,
+  `tests/test_cli_gui_rpc.py`,
+  `docs/review/safe-fix-plan.md`,
+  `docs/review/approval-packets.md`,
+  `docs/architecture/coverage-ledger.md`,
+  `docs/security/logging-audit.md`,
+  `docs/unknowns/logging-audit.md`,
+  `docs/review/remediation-backlog.md`,
+  `docs/manual/12-projects-sessions-and-artifacts.md`,
+  `docs/13-gui-handshake.md`
+- Why this change is safe now:
+  the refreshed approval packet narrows the first project-output remediation to
+  the `project.show` family only, the GUI and RPC consumer path is now proven,
+  and an additive shared-log-safe JSON profile can reduce shell-facing path
+  exposure without breaking the existing local machine-readable contract
+- What behavior must remain unchanged:
+  existing `project show --format json` payload shape, GUI RPC hydration,
+  browser-side artifact resolution from `absolute_path`, project-show artifact
+  allowlist order, deterministic output for unchanged formats, and all
+  `project save` or `project load` behavior
+- Tests or checks to run:
+  `tools/run_pytest.sh -q tests/test_cli_project_show.py tests/test_cli_gui_rpc.py`,
+  `python3 tools/validate_contracts.py`,
+  `npx --yes markdownlint-cli docs/review/safe-fix-plan.md docs/review/approval-packets.md docs/architecture/coverage-ledger.md docs/security/logging-audit.md docs/unknowns/logging-audit.md docs/review/remediation-backlog.md docs/manual/12-projects-sessions-and-artifacts.md docs/13-gui-handshake.md`,
+  and `git diff --check -- src/mmo/cli.py src/mmo/cli_commands/_project.py tests/test_cli_project_show.py tests/test_cli_gui_rpc.py docs/review/safe-fix-plan.md docs/review/approval-packets.md docs/architecture/coverage-ledger.md docs/security/logging-audit.md docs/unknowns/logging-audit.md docs/review/remediation-backlog.md docs/manual/12-projects-sessions-and-artifacts.md docs/13-gui-handshake.md`
+- Docs to update:
+  `docs/review/safe-fix-plan.md`,
+  `docs/review/approval-packets.md`,
+  `docs/architecture/coverage-ledger.md`,
+  `docs/security/logging-audit.md`,
+  `docs/unknowns/logging-audit.md`,
+  `docs/review/remediation-backlog.md`,
+  `docs/manual/12-projects-sessions-and-artifacts.md`,
+  `docs/13-gui-handshake.md`
+- Rollback note:
+  revert the new shared-log-safe profile and restore the prior project-show
+  format list if callers, docs, or tests show that the new profile causes
+  confusion or accidental contract drift
+- Observability note:
+  this is an output-boundary hardening change. The touched logging-audit and
+  backlog docs must keep the existing default `json` format and the new
+  shared-log-safe profile distinct so the repo does not overclaim closure
+- Change type:
+  behavior-preserving code cleanup
+
 ## 7. Bundled subjective-bypass trust boundary
 
 - Exact files to change:

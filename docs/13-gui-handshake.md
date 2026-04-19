@@ -48,6 +48,10 @@ Notes:
   reopening prior results.
 - `run_config_defaults` is optional; use it as the default profile/preset source
   for GUI controls.
+- Keep `--format json` on the GUI path. The browser hydration flow depends on
+  the local `project.show` payload carrying `absolute_path` receipts for
+  allowlisted artifacts. Use `--format json-shared` only when you need a
+  shared-log-safe summary outside the local GUI flow.
 
 ## 2) Load `ui_bundle` (dashboard + presets + render_targets)
 

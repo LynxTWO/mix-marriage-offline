@@ -2706,9 +2706,13 @@ def main(argv: list[str] | None = None) -> int:
     )
     project_show_parser.add_argument(
         "--format",
-        choices=["json", "text"],
+        choices=["json", "json-shared", "text"],
         default="json",
-        help="Output format for project show output.",
+        help=(
+            "Output format for project show output. "
+            "'json' keeps local machine paths for GUI and RPC consumers. "
+            "'json-shared' drops machine-local path fields for shared logs."
+        ),
     )
 
     project_run_parser = project_subparsers.add_parser(
@@ -5150,7 +5154,8 @@ def main(argv: list[str] | None = None) -> int:
                 print(
                     (
                         "Missing project directory. Usage: "
-                        "mmo project show <project_dir> [--format json|text]."
+                        "mmo project show <project_dir> "
+                        "[--format json|json-shared|text]."
                     ),
                     file=sys.stderr,
                 )

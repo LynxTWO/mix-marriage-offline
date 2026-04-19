@@ -43,34 +43,37 @@ review. This pass does not edit application code.
   repo-owned shared channel because it asks for exact commands, artifact paths,
   and machine-readable behavior while also requiring scrubbing of private
   paths. Workflow inspection found no repo-owned upload path for project JSON,
-  scan JSON, or agent trace artifacts.
+  scan JSON, or agent trace artifacts. Phase 1 is now implemented on this
+  branch: `project show --format json-shared` drops `project_dir` and
+  per-artifact `absolute_path`, while the GUI and RPC path stays on the local
+  `json` contract.
 - Smallest safe edit after approval:
-  do not batch project and scan together. Start with the `project.show`
-  family, because it has a verified GUI RPC and browser consumer. Preserve the
-  local machine-readable contract where the GUI needs it, and add a separate
-  shared-log-safe summary surface or explicit local-only flag before touching
-  scan output. Keep `scan_session.py` unchanged until a later packet narrows
-  its required shared channels more clearly.
+  completed phase 1 on this branch by adding `project show --format
+  json-shared`. The next safe edit is still separate from scan: decide whether
+  shell-facing default `json`, `project save`, or `project load` should gain a
+  similar boundary change without breaking GUI and RPC hydration.
 - What could break:
   the GUI RPC hydration path, browser shell state, CLI callers, shell scripts,
   test fixtures, or support flows that assume the current project JSON shape.
-  A wider batch could also break scan wrappers that currently rely on file
-  output or in-memory parsing.
+  The implemented phase-1 profile is additive, so the remaining break risk
+  sits in any future change to default `json`, `project save`, `project load`,
+  or scan output.
 - Verification plan:
-  `tools/run_pytest.sh -q tests/test_cli_project_load_save.py tests/test_cli_project_show.py tests/test_cli_gui_rpc.py tests/test_scan_smoke.py tests/test_cli_scan_lfe_audit.py`
-  and `python3 tools/validate_contracts.py`, plus one local dev-shell
-  `project.show` spot-check and review of a captured stdout sample after the
-  change
+  phase 1 ran `tools/run_pytest.sh -q tests/test_cli_project_show.py tests/test_cli_gui_rpc.py`
+  and `python3 tools/validate_contracts.py`. Remaining phases should add
+  `tests/test_cli_project_load_save.py`, `tests/test_scan_smoke.py`, and
+  `tests/test_cli_scan_lfe_audit.py` when they touch those contracts, plus one
+  local dev-shell `project.show` spot-check and review of a captured stdout
+  sample after the change
 - Rollback plan:
-  revert the project-output contract change and restore the prior JSON shape if
-  GUI hydration, RPC callers, fixtures, or shell consumers break. Leave scan
-  untouched unless a later approved packet lands.
+  phase 1 can revert the new `json-shared` profile without changing the
+  existing GUI or RPC contract. Leave scan untouched unless a later approved
+  packet lands.
 - What human decision is required:
-  approve whether the repo should split this packet into phases, with
-  `project.show` first and scan later. Approve whether the local GUI and RPC
-  path keeps the full machine-readable payload while shell or support-facing
-  surfaces move to a reduced summary. Approve whether scan stays on a later
-  packet until the shared-channel proof is stronger.
+  phase 1 is complete. The next approval decision is whether the repo should
+  stop at the additive shared-safe profile for now, or begin phase 2 on
+  default `json`, `project save`, or `project load`. Scan should stay on a
+  later packet until the shared-channel proof is stronger.
 - Which unknowns still block the edit, if any:
   `docs/unknowns/remediation-pass.md` and
   `docs/unknowns/evidence-gap-pass.md` still record missing proof about

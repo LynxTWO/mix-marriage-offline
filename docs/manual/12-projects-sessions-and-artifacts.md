@@ -11,6 +11,12 @@ save ./project --session out/session.json
 
 Reload it later: mmo project load ./project --session out/session.json
 
+Project metadata. Use mmo project show ./project --format json for local
+tooling that needs the full allowlisted path receipts. If you need to paste
+project state into an issue or shared log, use mmo project show ./project
+--format json-shared first. That keeps the deterministic artifact summary and
+drops machine-local path fields.
+
 Bundles. A ui_bundle.json is a “pointer payload” that the GUI can consume. You
 can build one from a report plus optional artifacts: mmo bundle --report
 out/report.json --out out/ui_bundle.json

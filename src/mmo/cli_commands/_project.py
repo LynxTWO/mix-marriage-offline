@@ -303,6 +303,34 @@ def _build_project_show_payload(*, project_dir: Path) -> dict[str, Any]:
     }
 
 
+def _build_project_show_shared_payload(payload: dict[str, Any]) -> dict[str, Any]:
+    artifacts: list[dict[str, Any]] = []
+    raw_artifacts = payload.get("artifacts")
+    if isinstance(raw_artifacts, list):
+        for artifact in raw_artifacts:
+            if not isinstance(artifact, dict):
+                continue
+            artifacts.append(
+                {
+                    "path": artifact.get("path"),
+                    "required": artifact.get("required"),
+                    "schema": artifact.get("schema"),
+                    "exists": artifact.get("exists"),
+                    "sha256": artifact.get("sha256"),
+                    "last_built_marker": artifact.get("last_built_marker"),
+                }
+            )
+
+    # This profile is for issue threads, shell captures, and shared logs. It
+    # keeps the allowlisted artifact summary but drops machine-local paths.
+    return {
+        "artifacts": artifacts,
+        "last_built_markers": payload.get("last_built_markers"),
+        "paths_redacted": True,
+        "schema_versions": payload.get("schema_versions"),
+    }
+
+
 def _render_project_show_text(payload: dict[str, Any]) -> str:
     lines: list[str] = []
     project_dir = payload.get("project_dir", "")
@@ -599,6 +627,10 @@ def _run_project_show(
 
     if output_format == "json":
         print(json.dumps(payload, indent=2, sort_keys=True))
+        return 0
+
+    if output_format == "json-shared":
+        print(json.dumps(_build_project_show_shared_payload(payload), indent=2, sort_keys=True))
         return 0
 
     if output_format == "text":

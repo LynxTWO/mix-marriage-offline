@@ -1088,6 +1088,15 @@ class TestGuiRpcDeterminism(unittest.TestCase):
             project_show_result["project_dir"],
             self.project_dir.resolve().as_posix(),
         )
+        project_artifacts = {
+            row["path"]: row
+            for row in project_show_result.get("artifacts", [])
+            if isinstance(row, dict) and isinstance(row.get("path"), str)
+        }
+        self.assertEqual(
+            project_artifacts["stems/stems_index.json"]["absolute_path"],
+            (self.project_dir / "stems" / "stems_index.json").resolve().as_posix(),
+        )
 
         validate_result = by_id["4"]["result"]
         self.assertIn("ok", validate_result)
