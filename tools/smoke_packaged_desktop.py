@@ -156,7 +156,7 @@ def _find_artifact(*, bundle_root: Path, platform_tag: str) -> Path:
     )
     if not candidates:
         suffix_text = ", ".join(suffixes)
-        raise SmokeError(f"No {suffix_text} artifact found under {bundle_root}")
+        raise SmokeError(f"No {suffix_text} artifact found under the bundle root.")
     # Bundle selection is platform-specific because Windows publishes setup.exe
     # and MSI, while macOS and Linux package the app root directly.
     if platform_tag == "windows":
@@ -277,7 +277,7 @@ def _find_main_app_executable(
     if platform_tag == "macos":
         macos_dir = root / "Contents" / "MacOS"
         if not macos_dir.is_dir():
-            raise SmokeError(f"Expected macOS app executable directory is missing: {macos_dir}")
+            raise SmokeError("Expected the macOS app executable directory is missing.")
         candidates = [
             path
             for path in macos_dir.iterdir()
@@ -292,7 +292,7 @@ def _find_main_app_executable(
         ]
 
     if not candidates:
-        raise SmokeError(f"Could not find a packaged app executable under {root}")
+        raise SmokeError("Could not find a packaged app executable under the bundle root.")
 
     return max(
         candidates,
@@ -312,7 +312,7 @@ def _find_sidecar_binary(root: Path, *, platform_tag: str) -> Path:
     candidates = _find_sidecar_binaries(root, platform_tag=platform_tag)
     if not candidates:
         raise SmokeError(
-            f"Could not find a packaged sidecar under {root}\n"
+            "Could not find a packaged sidecar under the bundle root.\n"
             f"{_sidecar_search_receipt(root, platform_tag=platform_tag)}"
         )
     return min(
@@ -346,8 +346,8 @@ def _run_command(
         return completed
     raise SmokeError(
         f"{label} failed with exit code {completed.returncode}\n"
-        f"stdout:\n{completed.stdout}\n"
-        f"stderr:\n{completed.stderr}"
+        f"stdout_lines={_non_empty_line_count(completed.stdout)}\n"
+        f"stderr_lines={_non_empty_line_count(completed.stderr)}"
     )
 
 
@@ -362,7 +362,7 @@ def _artifact_kind(path: Path, *, platform_tag: str) -> str:
         return "app"
     if platform_tag == "linux" and path.suffix == ".AppImage":
         return "appimage"
-    raise SmokeError(f"Unsupported {platform_tag} artifact path: {path}")
+    raise SmokeError(f"Unsupported {platform_tag} artifact path: {path.name}")
 
 
 def _probe_packaged_sidecar(
@@ -404,8 +404,8 @@ def _probe_packaged_sidecar(
     except json.JSONDecodeError as exc:
         raise SmokeError(
             "Packaged sidecar plugins validate output was not valid JSON.\n"
-            f"stdout:\n{plugins_result.stdout}\n"
-            f"stderr:\n{plugins_result.stderr}"
+            f"stdout_lines={_non_empty_line_count(plugins_result.stdout)}\n"
+            f"stderr_lines={_non_empty_line_count(plugins_result.stderr)}"
         ) from exc
     if not isinstance(plugins_payload, dict) or not bool(plugins_payload.get("ok")):
         raise SmokeError(
@@ -426,8 +426,8 @@ def _probe_packaged_sidecar(
     except json.JSONDecodeError as exc:
         raise SmokeError(
             "Packaged sidecar env doctor output was not valid JSON.\n"
-            f"stdout:\n{env_doctor_result.stdout}\n"
-            f"stderr:\n{env_doctor_result.stderr}"
+            f"stdout_lines={_non_empty_line_count(env_doctor_result.stdout)}\n"
+            f"stderr_lines={_non_empty_line_count(env_doctor_result.stderr)}"
         ) from exc
     if not isinstance(env_doctor_payload, dict):
         raise SmokeError("Packaged sidecar env doctor probe did not return a JSON object.")
@@ -667,6 +667,81 @@ def _read_log_tail(path: Path, *, max_lines: int = 40) -> str:
     return "\n".join(lines[-max_lines:])
 
 
+def _non_empty_line_count(text: str) -> int:
+    return sum(1 for line in text.splitlines() if line.strip())
+
+
+def _path_label(value: Path | str | None) -> str:
+    if value is None:
+        return "(unknown)"
+    path = Path(str(value).strip())
+    return path.name or "(unknown)"
+
+
+def _shared_summary_snapshot(summary: dict[str, Any]) -> dict[str, Any]:
+    doctor = summary.get("doctor")
+    results_inspection = summary.get("resultsInspection")
+    artifact_paths = summary.get("artifactPaths")
+    workflow_stages = summary.get("workflowStagesCompleted")
+    return {
+        "appLaunchVerified": bool(summary.get("appLaunchVerified")),
+        "artifactPathKeys": sorted(
+            key
+            for key in artifact_paths.keys()
+            if isinstance(key, str)
+        ) if isinstance(artifact_paths, dict) else [],
+        "doctor": {
+            "envDoctorExitCode": doctor.get("envDoctorExitCode") if isinstance(doctor, dict) else None,
+            "ok": bool(doctor.get("ok")) if isinstance(doctor, dict) else False,
+            "pluginsExitCode": doctor.get("pluginsExitCode") if isinstance(doctor, dict) else None,
+            "versionExitCode": doctor.get("versionExitCode") if isinstance(doctor, dict) else None,
+        },
+        "ok": bool(summary.get("ok")),
+        "resultsInspection": results_inspection if isinstance(results_inspection, dict) else {},
+        "workflowStagesCompleted": [
+            stage
+            for stage in workflow_stages
+            if isinstance(stage, str) and stage.strip()
+        ] if isinstance(workflow_stages, list) else [],
+    }
+
+
+def _shared_render_truth_summary(truth: dict[str, Any]) -> dict[str, Any]:
+    agreement = truth.get("agreement")
+    deliverables_summary = truth.get("deliverables_summary")
+    root_cause = truth.get("root_cause")
+    qa_error_ids = truth.get("qa_error_ids")
+    valid_master_outputs = truth.get("valid_master_outputs")
+    valid_master_layouts = sorted(
+        {
+            _coerce_str(item.get("layout")).strip()
+            for item in valid_master_outputs
+            if isinstance(item, dict) and _coerce_str(item.get("layout")).strip()
+        }
+    ) if isinstance(valid_master_outputs, list) else []
+    return {
+        "agreement": agreement if isinstance(agreement, dict) else {},
+        "deliverables_summary": deliverables_summary if isinstance(deliverables_summary, dict) else {},
+        "expected_receipt_status": _coerce_str(truth.get("expected_receipt_status")).strip() or None,
+        "has_non_zero_scene_report_overlap": bool(truth.get("has_non_zero_scene_report_overlap")),
+        "has_uniform_rate_preservation_output": bool(truth.get("has_uniform_rate_preservation_output")),
+        "has_valid_master_audio_output": bool(truth.get("has_valid_master_audio_output")),
+        "qa_error_ids": [
+            item
+            for item in qa_error_ids
+            if isinstance(item, str) and item.strip()
+        ] if isinstance(qa_error_ids, list) else [],
+        "receipt_status": _coerce_str(truth.get("receipt_status")).strip() or None,
+        "root_cause": {
+            "category": _coerce_str(root_cause.get("category")).strip() or None,
+            "message": _coerce_str(root_cause.get("message")).strip() or None,
+            "top_failure_reason": _coerce_str(root_cause.get("top_failure_reason")).strip() or None,
+        } if isinstance(root_cause, dict) else {},
+        "valid_master_layouts": valid_master_layouts,
+        "valid_master_output_count": len(valid_master_outputs) if isinstance(valid_master_outputs, list) else 0,
+    }
+
+
 def _windows_install_receipt(
     *,
     product_name: str,
@@ -678,39 +753,26 @@ def _windows_install_receipt(
     launch_stderr: str,
 ) -> str:
     lines: list[str] = ["Windows installer receipt:"]
-    lines.append(f"- installer path: {installer_path if installer_path is not None else '(unknown)'}")
-    lines.append(f"- install log path: {install_log_path if install_log_path is not None else '(unknown)'}")
-    if install_root is not None:
-        lines.append(f"- install root: {install_root}")
-
-    lines.append("- likely install directory contents:")
-    search_dirs = _windows_candidate_install_dirs(product_name=product_name, env=env)
-    if install_root is not None:
-        search_dirs = _dedupe_paths([install_root, *search_dirs])
-    for directory in search_dirs[:8]:
-        lines.append(f"  {directory}: {_describe_directory_entries(directory)}")
-
-    if install_log_path is not None:
-        lines.append("- install log tail:")
-        lines.append(_read_log_tail(install_log_path))
-
-    lines.append("- launched app stdout:")
-    lines.append(launch_stdout.strip() or "(empty)")
-    lines.append("- launched app stderr:")
-    lines.append(launch_stderr.strip() or "(empty)")
+    lines.append(f"- product: {product_name}")
+    lines.append(f"- installer label: {_path_label(installer_path)}")
+    lines.append(f"- install log captured: {bool(install_log_path and install_log_path.exists())}")
+    lines.append(f"- install root detected: {install_root is not None}")
+    lines.append(f"- candidate install roots checked: {len(_windows_candidate_install_dirs(product_name=product_name, env=env))}")
+    lines.append(f"- launched app stdout lines: {_non_empty_line_count(launch_stdout)}")
+    lines.append(f"- launched app stderr lines: {_non_empty_line_count(launch_stderr)}")
     return "\n".join(lines)
 
 
 def _windows_cleanup_payload(result: WindowsCleanupResult) -> dict[str, Any]:
     return {
         "attempted": result.attempted,
-        "command": list(result.command),
-        "install_root": result.install_root.as_posix() if result.install_root is not None else "",
-        "notes": list(result.notes),
+        "install_root_detected": result.install_root is not None,
+        "note_count": len(result.notes),
+        "notes_present": bool(result.notes),
         "ok": result.ok,
         "removed_install_root": result.removed_install_root,
         "strategy": result.strategy or "",
-        "uninstall_log_path": result.uninstall_log_path.as_posix() if result.uninstall_log_path is not None else "",
+        "uninstall_log_captured": bool(result.uninstall_log_path and result.uninstall_log_path.exists()),
     }
 
 
@@ -719,15 +781,12 @@ def _windows_cleanup_receipt(result: WindowsCleanupResult) -> str:
     lines.append(f"- attempted: {result.attempted}")
     lines.append(f"- ok: {result.ok}")
     lines.append(f"- strategy: {result.strategy or '(none)'}")
-    lines.append(f"- command: {' '.join(result.command) if result.command else '(none)'}")
-    lines.append(f"- install root: {result.install_root if result.install_root is not None else '(unknown)'}")
+    lines.append(f"- install root detected: {result.install_root is not None}")
     lines.append(f"- removed install root: {result.removed_install_root}")
-    if result.uninstall_log_path is not None:
-        lines.append(f"- uninstall log path: {result.uninstall_log_path}")
-        lines.append("- uninstall log tail:")
-        lines.append(_read_log_tail(result.uninstall_log_path))
-    if result.notes:
-        lines.extend(f"- note: {note}" for note in result.notes)
+    lines.append(
+        f"- uninstall log captured: {bool(result.uninstall_log_path and result.uninstall_log_path.exists())}"
+    )
+    lines.append(f"- note count: {len(result.notes)}")
     return "\n".join(lines)
 
 
@@ -766,6 +825,50 @@ def _load_windows_install_state(state_path: Path) -> dict[str, Any] | None:
         return None
     if not isinstance(payload, dict):
         return None
+    return payload
+
+
+def _smoke_result_payload(
+    *,
+    artifact_path: Path,
+    platform_tag: str,
+    return_code: int | None,
+    stdout: str,
+    stderr: str,
+    render_truth: dict[str, Any],
+    windows_install_result: WindowsInstallResult | None,
+    installed_sidecar_paths: list[Path],
+    windows_install_state_path: Path | None,
+    defer_windows_cleanup: bool,
+) -> dict[str, Any]:
+    # CI and support logs only need the verdict and bounded summary fields.
+    # The install-state file keeps the full local paths for cleanup and follow-up checks.
+    payload: dict[str, Any] = {
+        "artifact_kind": _artifact_kind(artifact_path, platform_tag=platform_tag),
+        "artifact_label": artifact_path.name,
+        "ok": True,
+        "platform": platform_tag,
+        "render_truth": _shared_render_truth_summary(render_truth),
+        "return_code": return_code,
+        "stderr_line_count": _non_empty_line_count(stderr),
+        "stdout_line_count": _non_empty_line_count(stdout),
+    }
+    if windows_install_result is not None:
+        payload.update(
+            {
+                "install_log_captured": windows_install_result.install_log_path.exists(),
+                "install_root_detected": True,
+                "installed_sidecar_count": len(installed_sidecar_paths),
+                "installer_kind": windows_install_result.installer_kind,
+                "installer_label": windows_install_result.installer_path.name,
+                "launched_app_label": windows_install_result.app_executable.name,
+            }
+        )
+    if defer_windows_cleanup:
+        payload["cleanup_deferred"] = True
+    if windows_install_state_path is not None:
+        payload["windows_install_state_recorded"] = True
+        payload["windows_install_state_label"] = windows_install_state_path.name
     return payload
 
 
@@ -1080,10 +1183,9 @@ def _run_windows_installer(
         return
     raise SmokeError(
         f"{label} failed with exit code {completed.returncode}\n"
-        f"install_log={install_log_path}\n"
-        f"stdout:\n{completed.stdout}\n"
-        f"stderr:\n{completed.stderr}\n"
-        f"log_tail:\n{_read_log_tail(install_log_path)}"
+        f"install_log_captured={install_log_path.exists()}\n"
+        f"stdout_lines={_non_empty_line_count(completed.stdout)}\n"
+        f"stderr_lines={_non_empty_line_count(completed.stderr)}"
     )
 
 
@@ -1290,7 +1392,9 @@ def _launch_smoke_app(
                 stderr = _read_capture(stderr_capture)
                 raise SmokeError(
                     "Packaged app exited before writing the smoke summary.\n"
-                    f"exit_code={return_code}\nstdout:\n{stdout}\nstderr:\n{stderr}"
+                    f"exit_code={return_code}\n"
+                    f"stdout_lines={_non_empty_line_count(stdout)}\n"
+                    f"stderr_lines={_non_empty_line_count(stderr)}"
                 )
             if time.monotonic() - started_at > timeout_s:
                 process.terminate()
@@ -1303,7 +1407,8 @@ def _launch_smoke_app(
                 stderr = _read_capture(stderr_capture)
                 raise SmokeError(
                     "Timed out waiting for the packaged app smoke summary.\n"
-                    f"stdout:\n{stdout}\nstderr:\n{stderr}"
+                    f"stdout_lines={_non_empty_line_count(stdout)}\n"
+                    f"stderr_lines={_non_empty_line_count(stderr)}"
                 )
             time.sleep(1.0)
 
@@ -1934,27 +2039,27 @@ def _validate_workspace_render_truth(*, artifact_paths: dict[str, Any]) -> dict[
     if agreement.get("deliverables_summary") is not True:
         raise SmokeError(
             "Packaged smoke render artifacts disagreed about deliverable status.\n"
-            f"{json.dumps(truth, indent=2, sort_keys=True)}"
+            f"{json.dumps(_shared_render_truth_summary(truth), indent=2, sort_keys=True)}"
         )
     if agreement.get("scene_binding_summary") is not True:
         raise SmokeError(
             "Packaged smoke manifest and receipt disagreed about scene binding normalization.\n"
-            f"{json.dumps(truth, indent=2, sort_keys=True)}"
+            f"{json.dumps(_shared_render_truth_summary(truth), indent=2, sort_keys=True)}"
         )
     if agreement.get("preflight_summary") is not True:
         raise SmokeError(
             "Packaged smoke manifest and receipt disagreed about preflight overlap diagnostics.\n"
-            f"{json.dumps(truth, indent=2, sort_keys=True)}"
+            f"{json.dumps(_shared_render_truth_summary(truth), indent=2, sort_keys=True)}"
         )
     if agreement.get("result_summary") is not True:
         raise SmokeError(
             "Packaged smoke manifest and receipt disagreed about the top-level render result summary.\n"
-            f"{json.dumps(truth, indent=2, sort_keys=True)}"
+            f"{json.dumps(_shared_render_truth_summary(truth), indent=2, sort_keys=True)}"
         )
     if agreement.get("receipt_lifecycle_status") is not True:
         raise SmokeError(
             "Packaged smoke receipt lifecycle status did not match the deliverable result bucket.\n"
-            f"{json.dumps(truth, indent=2, sort_keys=True)}"
+            f"{json.dumps(_shared_render_truth_summary(truth), indent=2, sort_keys=True)}"
         )
     root_cause = truth.get("root_cause")
     if not isinstance(root_cause, dict):
@@ -1965,7 +2070,7 @@ def _validate_workspace_render_truth(*, artifact_paths: dict[str, Any]) -> dict[
         raise SmokeError(
             "Packaged smoke failed before render because scene references do not match analyzed stems.\n"
             f"root_cause={root_cause_message or 'scene/report overlap was zero'}\n"
-            f"{json.dumps(truth, indent=2, sort_keys=True)}"
+            f"{json.dumps(_shared_render_truth_summary(truth), indent=2, sort_keys=True)}"
         )
     if truth.get("has_non_zero_scene_report_overlap") is not True:
         preflight_summary = truth.get("preflight_summary")
@@ -1976,18 +2081,18 @@ def _validate_workspace_render_truth(*, artifact_paths: dict[str, Any]) -> dict[
             ).strip() in {"clean", "partial", "failed"}:
                 raise SmokeError(
                     "Packaged smoke did not verify any non-zero overlap between the scene and analyzed session stems.\n"
-                    f"{json.dumps(truth, indent=2, sort_keys=True)}"
+                    f"{json.dumps(_shared_render_truth_summary(truth), indent=2, sort_keys=True)}"
                 )
     if truth.get("has_decoded_audio_output") is not True:
         if root_cause_category == "no_decodable_stems":
             raise SmokeError(
                 "Packaged smoke failed because no decodable stems reached any master deliverable.\n"
                 f"root_cause={root_cause_message or 'none of the planned stems decoded'}\n"
-                f"{json.dumps(truth, indent=2, sort_keys=True)}"
+                f"{json.dumps(_shared_render_truth_summary(truth), indent=2, sort_keys=True)}"
             )
         raise SmokeError(
             "Packaged smoke did not produce any deliverable with decoded_stem_count > 0.\n"
-            f"{json.dumps(truth, indent=2, sort_keys=True)}"
+            f"{json.dumps(_shared_render_truth_summary(truth), indent=2, sort_keys=True)}"
         )
     if truth.get("has_valid_master_audio_output") is not True and root_cause_category in {
         "all_masters_invalid",
@@ -1996,27 +2101,27 @@ def _validate_workspace_render_truth(*, artifact_paths: dict[str, Any]) -> dict[
         raise SmokeError(
             "Packaged smoke only produced invalid masters; no deliverable qualified as a valid master.\n"
             f"root_cause={root_cause_message or 'all master outputs were invalid'}\n"
-            f"{json.dumps(truth, indent=2, sort_keys=True)}"
+            f"{json.dumps(_shared_render_truth_summary(truth), indent=2, sort_keys=True)}"
         )
     if truth.get("has_meaningful_duration_output") is not True:
         raise SmokeError(
             "Packaged smoke did not produce any valid master longer than the minimum meaningful duration.\n"
-            f"{json.dumps(truth, indent=2, sort_keys=True)}"
+            f"{json.dumps(_shared_render_truth_summary(truth), indent=2, sort_keys=True)}"
         )
     if truth.get("has_non_silent_output") is not True:
         raise SmokeError(
             "Packaged smoke only produced all-zero valid-master outputs.\n"
-            f"{json.dumps(truth, indent=2, sort_keys=True)}"
+            f"{json.dumps(_shared_render_truth_summary(truth), indent=2, sort_keys=True)}"
         )
     if truth.get("has_valid_master_audio_output") is not True:
         raise SmokeError(
             "Packaged smoke did not produce a valid master with decoded audio, meaningful duration, and non-silent signal.\n"
-            f"{json.dumps(truth, indent=2, sort_keys=True)}"
+            f"{json.dumps(_shared_render_truth_summary(truth), indent=2, sort_keys=True)}"
         )
     if truth.get("has_uniform_rate_preservation_output") is not True:
         raise SmokeError(
             "Packaged smoke did not preserve the uniform source sample rate in the rendered valid master.\n"
-            f"{json.dumps(truth, indent=2, sort_keys=True)}"
+            f"{json.dumps(_shared_render_truth_summary(truth), indent=2, sort_keys=True)}"
         )
     result_bucket = _coerce_str(
         ((truth.get("deliverables_summary") or {}) if isinstance(truth.get("deliverables_summary"), dict) else {}).get("result_bucket")
@@ -2024,7 +2129,7 @@ def _validate_workspace_render_truth(*, artifact_paths: dict[str, Any]) -> dict[
     if result_bucket not in _VALID_MASTER_RESULT_BUCKETS:
         raise SmokeError(
             "Packaged smoke ended without a valid-master result bucket.\n"
-            f"{json.dumps(truth, indent=2, sort_keys=True)}"
+            f"{json.dumps(_shared_render_truth_summary(truth), indent=2, sort_keys=True)}"
         )
     return truth
 
@@ -2040,7 +2145,7 @@ def _validate_summary(
     if not bool(summary.get("ok")):
         raise SmokeError(
             "Packaged desktop smoke summary reported failure.\n"
-            f"{json.dumps(summary, indent=2, sort_keys=True)}"
+            f"{json.dumps(_shared_summary_snapshot(summary), indent=2, sort_keys=True)}"
         )
 
     doctor = summary.get("doctor")
@@ -2082,7 +2187,7 @@ def _validate_summary(
         if _path_is_under(data_root, repo_root):
             raise SmokeError(
                 "Packaged sidecar resolved MMO data back to the repo checkout instead of bundled data.\n"
-                f"data_root={data_root}"
+                f"data_root_label={_path_label(data_root)}"
             )
 
     artifact_paths = summary.get("artifactPaths")
@@ -2102,16 +2207,16 @@ def _validate_summary(
         "scenePath",
         "stemsMapPath",
     )
-    missing_files = [
-        f"{key}={path_value}"
+    missing_artifact_keys = [
+        key
         for key in required_artifact_keys
         for path_value in [artifact_paths.get(key)]
         if not isinstance(path_value, str) or not Path(path_value).is_file()
     ]
-    if missing_files:
+    if missing_artifact_keys:
         raise SmokeError(
             "Packaged smoke did not produce the expected artifact files.\n"
-            + "\n".join(missing_files)
+            + "\n".join(sorted(missing_artifact_keys))
         )
 
     render_dir = artifact_paths.get("workspaceDir")
@@ -2231,7 +2336,7 @@ def _cleanup_windows_install_state(
                         "notes": ["Windows install state file was missing or unreadable."],
                         "ok": False,
                     },
-                    "state_path": state_path.as_posix(),
+                    "state_file_label": state_path.name,
                 },
                 indent=2,
                 sort_keys=True,
@@ -2248,7 +2353,7 @@ def _cleanup_windows_install_state(
         json.dumps(
             {
                 "cleanup": _windows_cleanup_payload(cleanup_result),
-                "state_path": state_path.as_posix(),
+                "state_file_label": state_path.name,
             },
             indent=2,
             sort_keys=True,
@@ -2397,33 +2502,18 @@ def main() -> int:
             allow_repo_data_root=bool(args.allow_repo_data_root),
         )
 
-        payload = {
-            "artifact": artifact_path.as_posix(),
-            "ok": True,
-            "platform": platform_tag,
-            "return_code": return_code,
-            "stderr_lines": [line for line in stderr.splitlines() if line.strip()],
-            "stdout_lines": [line for line in stdout.splitlines() if line.strip()],
-            "render_truth": render_truth,
-            "summary_path": summary_path.as_posix(),
-            "workspace_dir": workspace_dir.as_posix(),
-        }
-        if windows_install_result is not None:
-            payload.update(
-                {
-                    "install_log_path": windows_install_result.install_log_path.as_posix(),
-                    "install_root": windows_install_result.install_root.as_posix(),
-                    "installed_sidecar_paths": [path.as_posix() for path in installed_sidecar_paths],
-                    "installer_kind": windows_install_result.installer_kind,
-                    "installer_path": windows_install_result.installer_path.as_posix(),
-                    "launched_app": windows_install_result.app_executable.as_posix(),
-                }
-            )
-        if defer_windows_cleanup and windows_install_result is not None:
-            payload["cleanup_deferred"] = True
-            if windows_install_state_path is not None:
-                payload["windows_install_state_path"] = windows_install_state_path.as_posix()
-        result_payload = payload
+        result_payload = _smoke_result_payload(
+            artifact_path=artifact_path,
+            platform_tag=platform_tag,
+            return_code=return_code,
+            stdout=stdout,
+            stderr=stderr,
+            render_truth=render_truth,
+            windows_install_result=windows_install_result,
+            installed_sidecar_paths=installed_sidecar_paths,
+            windows_install_state_path=windows_install_state_path,
+            defer_windows_cleanup=defer_windows_cleanup,
+        )
     except SmokeError as exc:
         error_message = str(exc)
     finally:
@@ -2445,7 +2535,7 @@ def main() -> int:
                 if defer_windows_cleanup and not args.keep_temp
                 else ""
             )
-            print(f"packaged desktop smoke temp root kept at {temp_root}{reason}", file=sys.stderr)
+            print(f"packaged desktop smoke temp root kept on disk{reason}", file=sys.stderr)
         else:
             shutil.rmtree(temp_root, ignore_errors=True)
 

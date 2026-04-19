@@ -254,6 +254,7 @@ _RPC_DISCOVER_METHOD_DETAILS: dict[str, dict[str, Any]] = {
             },
             "optional": {
                 "force": "boolean",
+                "format": "string",
                 "session": "string",
             },
             "examples": [
@@ -262,6 +263,7 @@ _RPC_DISCOVER_METHOD_DETAILS: dict[str, dict[str, Any]] = {
                 },
                 {
                     "force": True,
+                    "format": "json-shared",
                     "project_dir": "C:/mmo/project",
                     "session": "C:/mmo/project/project_session.json",
                 },
@@ -271,11 +273,14 @@ _RPC_DISCOVER_METHOD_DETAILS: dict[str, dict[str, Any]] = {
             "keys": [
                 "history_count",
                 "ok",
-                "project_dir",
                 "receipt_count",
-                "scene_path",
                 "session_path",
                 "written",
+            ],
+            "optional_keys": [
+                "paths_redacted",
+                "project_dir",
+                "scene_path",
             ],
         },
     },
@@ -286,6 +291,7 @@ _RPC_DISCOVER_METHOD_DETAILS: dict[str, dict[str, Any]] = {
             },
             "optional": {
                 "force": "boolean",
+                "format": "string",
                 "session": "string",
             },
             "examples": [
@@ -294,6 +300,7 @@ _RPC_DISCOVER_METHOD_DETAILS: dict[str, dict[str, Any]] = {
                 },
                 {
                     "force": True,
+                    "format": "json-shared",
                     "project_dir": "C:/mmo/project",
                     "session": "C:/mmo/project/project_session.json",
                 },
@@ -303,10 +310,13 @@ _RPC_DISCOVER_METHOD_DETAILS: dict[str, dict[str, Any]] = {
             "keys": [
                 "history_count",
                 "ok",
-                "project_dir",
                 "receipt_count",
                 "session_path",
                 "written",
+            ],
+            "optional_keys": [
+                "paths_redacted",
+                "project_dir",
             ],
         },
     },
@@ -1217,7 +1227,7 @@ def _handle_project_save(params: dict[str, Any]) -> dict[str, Any]:
     _validate_allowed_params(
         method="project.save",
         params=params,
-        allowed={"project_dir", "session", "force"},
+        allowed={"project_dir", "session", "force", "format"},
     )
     project_dir = _require_str_param(method="project.save", params=params, name="project_dir")
     session = _optional_str_param(
@@ -1232,12 +1242,24 @@ def _handle_project_save(params: dict[str, Any]) -> dict[str, Any]:
         name="force",
         default=False,
     )
+    output_format = _optional_str_param(
+        method="project.save",
+        params=params,
+        name="format",
+        default="json",
+    )
+    if output_format not in {"json", "json-shared"}:
+        raise _RpcRequestError(
+            code="RPC.INVALID_PARAMS",
+            message="project.save param 'format' must be 'json' or 'json-shared'.",
+        )
     return _call_json_command(
         method="project.save",
         invoke=lambda: _run_project_save(
             project_dir=Path(project_dir),
             session_path=Path(session) if isinstance(session, str) else None,
             force=force,
+            output_format=output_format,
         ),
     )
 
@@ -1246,7 +1268,7 @@ def _handle_project_load(params: dict[str, Any]) -> dict[str, Any]:
     _validate_allowed_params(
         method="project.load",
         params=params,
-        allowed={"project_dir", "session", "force"},
+        allowed={"project_dir", "session", "force", "format"},
     )
     project_dir = _require_str_param(method="project.load", params=params, name="project_dir")
     session = _optional_str_param(
@@ -1261,12 +1283,24 @@ def _handle_project_load(params: dict[str, Any]) -> dict[str, Any]:
         name="force",
         default=False,
     )
+    output_format = _optional_str_param(
+        method="project.load",
+        params=params,
+        name="format",
+        default="json",
+    )
+    if output_format not in {"json", "json-shared"}:
+        raise _RpcRequestError(
+            code="RPC.INVALID_PARAMS",
+            message="project.load param 'format' must be 'json' or 'json-shared'.",
+        )
     return _call_json_command(
         method="project.load",
         invoke=lambda: _run_project_load(
             project_dir=Path(project_dir),
             session_path=Path(session) if isinstance(session, str) else None,
             force=force,
+            output_format=output_format,
         ),
     )
 

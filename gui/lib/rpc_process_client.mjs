@@ -1,12 +1,19 @@
 import { spawn } from "node:child_process";
 import readline from "node:readline";
 
-import { buildRpcCommandCandidates } from "./mmo_cli_runner.mjs";
+import {
+  buildRpcCommandCandidates,
+  processErrorSummary,
+  publicCandidateLabel,
+} from "./mmo_cli_runner.mjs";
 
 const _DEFAULT_TIMEOUT_MS = 15_000;
 
-function _errorToText(error) {
-  return error instanceof Error ? error.message : String(error);
+function _errorMessageText(error) {
+  if (error instanceof Error) {
+    return error.message;
+  }
+  return processErrorSummary(error);
 }
 
 export class RpcProcessClient {
@@ -23,7 +30,8 @@ export class RpcProcessClient {
     this._reader = null;
     this._pending = new Map();
     this._nextId = 1;
-    this._stderrLines = [];
+    this._stderrLineCount = 0;
+    this._stderrPresent = false;
     this._startingPromise = null;
     this._stopping = false;
     this._activeLabel = "";
@@ -53,7 +61,7 @@ export class RpcProcessClient {
         await this._startCandidate(candidate);
         return;
       } catch (error) {
-        failures.push(`${candidate.label || candidate.command}: ${_errorToText(error)}`);
+        failures.push(`${publicCandidateLabel(candidate)}: ${_errorMessageText(error)}`);
         await this.stop();
       }
     }
@@ -71,8 +79,9 @@ export class RpcProcessClient {
     child.stderr.setEncoding("utf8");
 
     this._child = child;
-    this._activeLabel = candidate.label || candidate.command;
-    this._stderrLines = [];
+    this._activeLabel = publicCandidateLabel(candidate);
+    this._stderrLineCount = 0;
+    this._stderrPresent = false;
     this._bindChild(child);
 
     // The client is not live until rpc.discover succeeds. That handshake proves
@@ -87,22 +96,20 @@ export class RpcProcessClient {
     });
 
     child.stderr.on("data", (chunk) => {
-      const text = String(chunk).trim();
-      if (!text) {
+      const lines = String(chunk).split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+      if (lines.length === 0) {
         return;
       }
-      // Keep a short stderr tail so startup and crash failures still have a
-      // clue for the browser shell without retaining unbounded process output.
-      this._stderrLines.push(...text.split(/\r?\n/));
-      if (this._stderrLines.length > 40) {
-        this._stderrLines = this._stderrLines.slice(-40);
-      }
+      // Track only whether stderr existed and how much of it arrived. The GUI
+      // should not replay raw RPC stderr because failures often contain local paths.
+      this._stderrPresent = true;
+      this._stderrLineCount += lines.length;
     });
 
     child.on("error", (error) => {
       this._rejectAllPending(
         new Error(
-          `RPC process error (${this._activeLabel}): ${_errorToText(error)}`,
+          `RPC process error (${this._activeLabel}): ${processErrorSummary(error)}`,
         ),
       );
     });
@@ -113,8 +120,10 @@ export class RpcProcessClient {
         `code=${code === null ? "null" : String(code)}`,
         `signal=${signal === null ? "null" : String(signal)}`,
       ].join(", ");
-      const stderrTail = this._stderrLines.slice(-5).join(" | ");
-      const message = stderrTail ? `${reason}. stderr: ${stderrTail}` : reason;
+      const stderrText = this._stderrPresent
+        ? `stderr_present=true, stderr_lines=${this._stderrLineCount}`
+        : "stderr_present=false";
+      const message = `${reason}, ${stderrText}`;
       if (!this._stopping) {
         this._rejectAllPending(new Error(message));
       } else {

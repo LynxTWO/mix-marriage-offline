@@ -26,6 +26,9 @@ _PLUGIN_REGISTRY: dict[str, StereoPlugin] = {
 }
 
 _MULTICHANNEL_PLUGIN_REGISTRY: dict[str, MultichannelPlugin] = {
+    # Subjective plugins are a deliberate DSP-side exception. Binaural preview
+    # and conservative multichannel polish resolve these shipped IDs here
+    # without going through plugin_loader, bundled manifests, or market roots.
     "height_air_v0": HeightAirV0Plugin(),
     "stereo_widener_v0": StereoWidenerV0Plugin(),
     "early_reflections_v0": EarlyReflectionsV0Plugin(),

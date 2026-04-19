@@ -6,6 +6,23 @@ import { fileURLToPath } from "node:url";
 const _MODULE_DIR = path.dirname(fileURLToPath(import.meta.url));
 export const REPO_ROOT = path.resolve(_MODULE_DIR, "..", "..");
 
+function _basenameLike(text) {
+  return text.replace(/^.*[\\/]/, "");
+}
+
+function _publicLabelText(rawText) {
+  const text = typeof rawText === "string" ? rawText.trim() : "";
+  if (!text) {
+    return "";
+  }
+  return text.split(/\s+/).map((token) => {
+    if (token.includes("/") || token.includes("\\")) {
+      return _basenameLike(token);
+    }
+    return token;
+  }).join(" ");
+}
+
 function _pythonEnv() {
   const env = { ...process.env };
   const srcPath = path.join(REPO_ROOT, "src");
@@ -25,6 +42,42 @@ function _candidateLabel(candidate) {
     return `${candidate.command} ${args}`.trim();
   }
   return candidate.command;
+}
+
+export function publicCandidateLabel(candidate) {
+  const labeledText = typeof candidate?.label === "string" && candidate.label.trim()
+    ? candidate.label
+    : _candidateLabel(candidate);
+  // Browser-visible bridge errors must not expose absolute binary paths from
+  // env overrides or local installs. Keep only the public-facing command text.
+  return _publicLabelText(labeledText);
+}
+
+export function processErrorSummary(error) {
+  // Spawn errors can embed local path details in the raw exception text. The
+  // bridge only needs a stable failure category and, when present, an error code.
+  if (error instanceof Error && /timed out/i.test(error.message)) {
+    return "error=timeout";
+  }
+  const errorCode = typeof error?.code === "string" && error.code.trim()
+    ? error.code.trim()
+    : "";
+  if (errorCode) {
+    return `error=process_error; error_code=${errorCode}`;
+  }
+  return "error=process_error";
+}
+
+export function stderrSummary(stderrText) {
+  // Preserve enough debugging signal to show that stderr existed without
+  // replaying path-rich subprocess output into the browser shell.
+  const lines = typeof stderrText === "string"
+    ? stderrText.split(/\r?\n/).map((line) => line.trim()).filter(Boolean)
+    : [];
+  if (lines.length === 0) {
+    return "stderr_present=false";
+  }
+  return `stderr_present=true; stderr_lines=${lines.length}`;
 }
 
 export function buildCliCandidates() {
@@ -162,19 +215,16 @@ export async function runMmoCli(
     if (result.error === null && acceptedExitCodes.includes(result.code)) {
       return {
         ...result,
-        candidate: candidate.label || _candidateLabel(candidate),
+        candidate: publicCandidateLabel(candidate),
       };
     }
-    const label = candidate.label || _candidateLabel(candidate);
+    const label = publicCandidateLabel(candidate);
     // Failure summaries list every attempted candidate so setup drift in the
     // dev shell shows up as one error, not as a silent fallback.
     const codeText = result.code === null ? "null" : String(result.code);
-    const errorText = result.error ? `error=${result.error.message}` : `code=${codeText}`;
-    const stderrText = result.stderr.trim();
+    const errorText = result.error ? processErrorSummary(result.error) : `code=${codeText}`;
     failures.push(
-      stderrText
-        ? `${label}: ${errorText}; stderr=${stderrText}`
-        : `${label}: ${errorText}`,
+      `${label}: ${errorText}; ${stderrSummary(result.stderr)}`,
     );
   }
   throw new Error(

@@ -25,6 +25,9 @@ These checks run automatically through `python tools/validate_contracts.py`.
   sections.
 - `docs/README.md` must link the contributor workflow.
 - The narrow obvious sensitive-logging rule must pass.
+- The PR template and contributor workflow must keep the anti-dark-code
+  comment-drift reminder so comment removal or rewrite is called out in the
+  same change.
 
 The logging rule is intentionally small. It only looks for same-line logging
 calls with obvious sensitive markers. It is an early-drift check, not proof
@@ -38,7 +41,11 @@ These still depend on human review.
 - Whether a risky slice changed enough to move the coverage ledger
 - Whether a new unknown should be written down
 - Whether a hidden control-plane path or support tool was touched
+- Whether mirrored workspace copies such as `.claude/agents/` were treated as
+  if they were canonical steering or coverage-review targets
 - Whether anti-dark-code comments drifted from the code
+- Whether a removed anti-dark-code comment was replaced or intentionally
+  retired with enough explanation
 - Whether a release-path, rollback, or observability note now needs an update
 
 ## Doc Triggers
@@ -85,10 +92,12 @@ Use `docs/security/logging-audit.md` for those paths.
 - GitHub does not hard-enforce PR template completion in this repo.
 - Release signing, Pages deploy, and installer behavior still cross out-of-repo
   boundaries.
-- `.claude/agents` mirror drift still depends on the sync path and human
-  review.
+- `.claude/agents` remains a synced workspace mirror. Reviewers still need to
+  confirm that coverage and authority claims point back to `AGENTS.md` and
+  `docs/claude_agents/`.
 - The harness keeps low-risk edits light. It does not force ledger churn for
   every small change.
+- The harness can require comment-drift prompts, but it still cannot prove a removed explanatory comment was the right comment to remove.
 
 ## Future Harness Support
 

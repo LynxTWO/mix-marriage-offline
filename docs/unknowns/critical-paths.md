@@ -75,6 +75,22 @@ remained in this slice.
 Status for the 2026-04-16 packaged-contract-loader pass: no open question
 remained in this slice.
 
+Status for the 2026-04-17 bundled-plugin loader and market pass: no open
+question remained in the selected authority files. Wider bundled-plugin
+unknowns still live in `docs/unknowns/bundled-plugin-review.md`.
+
+Status for the 2026-04-17 bundled shipped-renderer pass: no open question
+remained in the selected renderer files. Wider bundled-plugin unknowns still
+live in `docs/unknowns/bundled-plugin-review.md`.
+
+Status for the 2026-04-17 bundled corrective-plugin pass: no open question
+remained in the selected detector and resolver files. Wider bundled-plugin
+unknowns still live in `docs/unknowns/bundled-plugin-review.md`.
+
+Status for the 2026-04-17 bundled subjective-bypass pass: no open question
+remained in the selected registry and preview-entry files. Wider bundled-plugin
+unknowns still live in `docs/unknowns/bundled-plugin-review.md`.
+
 | Area, file, line range, or function | Concern | Why it matters | Evidence found so far | Likely owner if known | Next best check | Risk level |
 | --- | --- | --- | --- | --- | --- | --- |
 | Initial backend comment pass | No open question in that pass. The selected backend paths were explainable from code, docs, and the system map without inventing behavior. | Future passes still need one place to record uncertainty instead of burying it in comments. | Reviewed `src/mmo/resources.py`, `src/mmo/core/plugin_loader.py`, `src/mmo/core/plugin_market.py`, `src/mmo/cli_commands/_project.py`, `src/mmo/cli_commands/_gui_rpc.py`, `src/mmo/core/render_engine.py`, `src/mmo/core/watch_folder.py`, and `docs/architecture/system-map.md`. | not declared in repo | Add a row when a later pass finds unresolved behavior. | Critical |

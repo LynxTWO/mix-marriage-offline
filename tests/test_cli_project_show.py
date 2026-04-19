@@ -72,6 +72,17 @@ def tearDownModule() -> None:
         shutil.rmtree(_SANDBOX, ignore_errors=True)
 
 
+def _artifact_rows_by_path(payload: dict[str, object]) -> dict[str, dict[str, object]]:
+    artifacts = payload.get("artifacts")
+    if not isinstance(artifacts, list):
+        return {}
+    return {
+        row["path"]: row
+        for row in artifacts
+        if isinstance(row, dict) and isinstance(row.get("path"), str)
+    }
+
+
 class TestProjectShowJSON(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -79,7 +90,7 @@ class TestProjectShowJSON(unittest.TestCase):
 
     def test_json_contains_allowlisted_artifact_metadata(self) -> None:
         exit_code, stdout, stderr = _run_main(
-            ["project", "show", str(self.project_dir), "--format", "json"]
+            ["project", "show", str(self.project_dir), "--format", "json-local"]
         )
         self.assertEqual(exit_code, 0, msg=stderr)
         payload = json.loads(stdout)
@@ -97,11 +108,7 @@ class TestProjectShowJSON(unittest.TestCase):
         self.assertIn("stems/stems_index.json", artifact_paths)
         self.assertIn("listen_pack.json", artifact_paths)
 
-        by_path = {
-            row["path"]: row
-            for row in artifacts
-            if isinstance(row, dict) and isinstance(row.get("path"), str)
-        }
+        by_path = _artifact_rows_by_path(payload)
         stems_index = by_path["stems/stems_index.json"]
         self.assertTrue(stems_index["exists"])
         self.assertTrue(stems_index["required"])
@@ -120,12 +127,54 @@ class TestProjectShowJSON(unittest.TestCase):
 
     def test_json_output_is_byte_identical_across_runs(self) -> None:
         _, stdout_a, _ = _run_main(
-            ["project", "show", str(self.project_dir), "--format", "json"]
+            ["project", "show", str(self.project_dir), "--format", "json-local"]
         )
         _, stdout_b, _ = _run_main(
-            ["project", "show", str(self.project_dir), "--format", "json"]
+            ["project", "show", str(self.project_dir), "--format", "json-local"]
         )
         self.assertEqual(stdout_a, stdout_b)
+
+    def test_shared_json_redacts_machine_local_paths(self) -> None:
+        exit_code, stdout, stderr = _run_main(
+            ["project", "show", str(self.project_dir), "--format", "json-shared"]
+        )
+        self.assertEqual(exit_code, 0, msg=stderr)
+        payload = json.loads(stdout)
+
+        self.assertNotIn("project_dir", payload)
+        self.assertTrue(payload["paths_redacted"])
+        self.assertIn("schema_versions", payload)
+        self.assertIn("last_built_markers", payload)
+        self.assertNotIn(self.project_dir.resolve().as_posix(), stdout)
+
+        by_path = _artifact_rows_by_path(payload)
+        self.assertIn("stems/stems_index.json", by_path)
+        self.assertIn("listen_pack.json", by_path)
+        self.assertNotIn("absolute_path", by_path["stems/stems_index.json"])
+        self.assertTrue(by_path["stems/stems_index.json"]["exists"])
+        self.assertTrue(by_path["stems/stems_index.json"]["required"])
+        self.assertEqual(by_path["listen_pack.json"]["last_built_marker"], "missing")
+
+    def test_shared_json_output_is_byte_identical_across_runs(self) -> None:
+        _, stdout_a, _ = _run_main(
+            ["project", "show", str(self.project_dir), "--format", "json-shared"]
+        )
+        _, stdout_b, _ = _run_main(
+            ["project", "show", str(self.project_dir), "--format", "json-shared"]
+        )
+        self.assertEqual(stdout_a, stdout_b)
+
+    def test_project_show_defaults_to_shared_json(self) -> None:
+        exit_code, stdout, stderr = _run_main(["project", "show", str(self.project_dir)])
+        self.assertEqual(exit_code, 0, msg=stderr)
+        payload = json.loads(stdout)
+
+        self.assertNotIn("project_dir", payload)
+        self.assertTrue(payload["paths_redacted"])
+        by_path = _artifact_rows_by_path(payload)
+        self.assertIn("stems/stems_index.json", by_path)
+        self.assertNotIn("absolute_path", by_path["stems/stems_index.json"])
+        self.assertNotIn(self.project_dir.resolve().as_posix(), stdout)
 
 
 class TestProjectShowNoScanning(unittest.TestCase):
@@ -167,7 +216,7 @@ class TestProjectShowNoScanning(unittest.TestCase):
             new=_guarded_rglob,
         ):
             exit_code, stdout, stderr = _run_main(
-                ["project", "show", str(self.project_dir), "--format", "json"]
+                ["project", "show", str(self.project_dir), "--format", "json-local"]
             )
         self.assertEqual(exit_code, 0, msg=stderr)
         self.assertEqual(project_glob_calls, [])
@@ -179,7 +228,7 @@ class TestProjectShowNoScanning(unittest.TestCase):
 class TestProjectShowStableErrors(unittest.TestCase):
     def test_missing_project_directory_error_is_stable(self) -> None:
         missing_dir = _SANDBOX / "errors" / "missing_project"
-        command = ["project", "show", str(missing_dir), "--format", "json"]
+        command = ["project", "show", str(missing_dir), "--format", "json-local"]
         exit_code_a, stdout_a, stderr_a = _run_main(command)
         exit_code_b, stdout_b, stderr_b = _run_main(command)
 
@@ -194,7 +243,7 @@ class TestProjectShowStableErrors(unittest.TestCase):
         )
 
     def test_missing_project_directory_argument_error_is_stable(self) -> None:
-        command = ["project", "show", "--format", "json"]
+        command = ["project", "show", "--format", "json-local"]
         exit_code_a, stdout_a, stderr_a = _run_main(command)
         exit_code_b, stdout_b, stderr_b = _run_main(command)
 
@@ -207,7 +256,8 @@ class TestProjectShowStableErrors(unittest.TestCase):
             stderr_a.strip(),
             (
                 "Missing project directory. Usage: "
-                "mmo project show <project_dir> [--format json|text]."
+                "mmo project show <project_dir> "
+                "[--format json-local|json-shared|text]."
             ),
         )
 

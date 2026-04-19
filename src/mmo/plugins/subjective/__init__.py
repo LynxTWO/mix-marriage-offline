@@ -12,4 +12,8 @@ binaural_preview_v0: Conservative headphone virtualization preview renderer.
 All plugins implement the ``MultichannelPlugin`` protocol from
 ``mmo.dsp.plugins.base``.  They use ``LayoutContext`` for all channel routing
 so they work correctly across SMPTE, FILM, LOGIC_PRO, VST3, and AAF ordering.
+
+This pack is shipped through ``mmo.dsp.plugins.registry`` instead of YAML
+manifest discovery. That keeps the binaural preview and conservative
+multichannel helpers on a fixed DSP-side allowlist.
 """

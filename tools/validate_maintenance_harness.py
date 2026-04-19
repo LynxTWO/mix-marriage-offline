@@ -21,12 +21,14 @@ REQUIRED_FILE_SNIPPETS: tuple[tuple[str, tuple[str, ...]], ...] = (
             "- Risk changed:",
             "- Approval needed:",
             "- Docs updated:",
+            "- Anti-dark-code comments checked:",
             "- Tests or checks run:",
             "- Repo evidence reviewed:",
             "docs/STATUS.md",
             "docs/milestones.yaml",
             "CHANGELOG.md",
             "python tools/validate_contracts.py",
+            "Replaced, updated, or explicitly explained any anti-dark-code comment",
         ),
     ),
     (
@@ -43,6 +45,7 @@ REQUIRED_FILE_SNIPPETS: tuple[tuple[str, tuple[str, ...]], ...] = (
             "## Keep Unknowns Visible",
             "## Respect Approval Gates",
             "## Re-check Anti-Dark-Code Comments",
+            "replace it in the same change or state in the PR record why the old comment no longer applies",
         ),
     ),
     (
@@ -55,6 +58,8 @@ REQUIRED_FILE_SNIPPETS: tuple[tuple[str, tuple[str, ...]], ...] = (
             "## Protected Areas Requiring Approval",
             "## Logging And Telemetry Checks",
             "## Remaining Human-Review Limits",
+            "comment-drift reminder",
+            "cannot prove a removed explanatory comment was the right comment to remove",
         ),
     ),
     (
@@ -119,6 +124,10 @@ LIMIT_NOTE = (
 )
 
 
+def _normalize_whitespace(text: str) -> str:
+    return " ".join(text.split())
+
+
 def _display_path(path: Path, *, repo_root: Path) -> str:
     try:
         return path.resolve().relative_to(repo_root.resolve()).as_posix()
@@ -152,7 +161,11 @@ def _check_required_files(repo_root: Path) -> tuple[list[dict[str, Any]], list[s
             details.append(file_details)
             continue
 
-        missing_snippets = [snippet for snippet in snippets if snippet not in text]
+        normalized_text = _normalize_whitespace(text)
+        missing_snippets = [
+            snippet for snippet in snippets
+            if _normalize_whitespace(snippet) not in normalized_text
+        ]
         file_details["missing_snippets"] = missing_snippets
         if missing_snippets:
             file_details["ok"] = False

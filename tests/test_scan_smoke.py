@@ -10,10 +10,11 @@ from tools.make_demo_stems import make_demo_stems
 
 
 class TestScanSessionSmoke(unittest.TestCase):
-    def test_scan_session_schema_and_measurements(self) -> None:
+    def test_scan_session_json_contract_and_measurements(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             stems_dir = Path(temp_dir) / "stems"
             make_demo_stems(stems_dir)
+            out_path = Path(temp_dir) / "report.json"
 
             repo_root = Path(__file__).resolve().parents[1]
             scan_session = repo_root / "tools" / "scan_session.py"
@@ -29,6 +30,8 @@ class TestScanSessionSmoke(unittest.TestCase):
                     os.fspath(stems_dir),
                     "--schema",
                     os.fspath(schema_path),
+                    "--out",
+                    os.fspath(out_path),
                     "--meters",
                     "basic",
                     "--peak",
@@ -39,7 +42,8 @@ class TestScanSessionSmoke(unittest.TestCase):
                 env=env,
             )
 
-            report = json.loads(result.stdout)
+            self.assertEqual(result.stdout, "")
+            report = json.loads(out_path.read_text(encoding="utf-8"))
             self.assertEqual(
                 report.get("session", {}).get("stems_dir"),
                 stems_dir.resolve().as_posix(),
@@ -74,6 +78,73 @@ class TestScanSessionSmoke(unittest.TestCase):
             self.assertIn(vibe_signals.get("masking_level"), {"low", "medium", "high"})
             self.assertIn(vibe_signals.get("translation_risk"), {"low", "medium", "high"})
             self.assertIsInstance(vibe_signals.get("notes"), list)
+
+    def test_scan_session_rejects_retired_json_local_stdout_flag(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            stems_dir = Path(temp_dir) / "stems"
+            make_demo_stems(stems_dir)
+
+            repo_root = Path(__file__).resolve().parents[1]
+            env = os.environ.copy()
+            env["PYTHONPATH"] = str(repo_root / "src")
+
+            result = subprocess.run(
+                [
+                    os.fspath(os.getenv("PYTHON", "") or sys.executable),
+                    "-m",
+                    "mmo",
+                    "scan",
+                    os.fspath(stems_dir),
+                    "--format",
+                    "json-local",
+                ],
+                check=False,
+                capture_output=True,
+                text=True,
+                env=env,
+            )
+
+            self.assertEqual(result.returncode, 2)
+            self.assertIn("invalid choice", result.stderr)
+            self.assertIn("json-shared", result.stderr)
+
+    def test_scan_session_defaults_to_shared_json_stdout(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            stems_dir = Path(temp_dir) / "stems"
+            make_demo_stems(stems_dir)
+
+            repo_root = Path(__file__).resolve().parents[1]
+            env = os.environ.copy()
+            env["PYTHONPATH"] = str(repo_root / "src")
+
+            result = subprocess.run(
+                [
+                    os.fspath(os.getenv("PYTHON", "") or sys.executable),
+                    "-m",
+                    "mmo",
+                    "scan",
+                    os.fspath(stems_dir),
+                    "--meters",
+                    "basic",
+                    "--peak",
+                ],
+                check=True,
+                capture_output=True,
+                text=True,
+                env=env,
+            )
+
+            report = json.loads(result.stdout)
+            session = report.get("session", {})
+            self.assertNotIn("stems_dir", session)
+            stems = session.get("stems", [])
+            self.assertGreaterEqual(len(stems), 1)
+            first_stem = stems[0]
+            self.assertNotIn("sha256", first_stem)
+            self.assertNotIn("source_metadata", first_stem)
+            self.assertNotIn("resolved_path", first_stem)
+            self.assertNotIn("resolve_error_detail", first_stem)
+            self.assertEqual(first_stem.get("file_path"), Path(first_stem["file_path"]).name)
 
 
 if __name__ == "__main__":

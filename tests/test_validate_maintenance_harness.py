@@ -53,6 +53,7 @@ class TestValidateMaintenanceHarness(unittest.TestCase):
                     "- Risk changed:",
                     "- Approval needed:",
                     "- Docs updated:",
+                    "- Anti-dark-code comments checked:",
                     "- Tests or checks run:",
                     "- Repo evidence reviewed:",
                     "",
@@ -63,6 +64,7 @@ class TestValidateMaintenanceHarness(unittest.TestCase):
                     "- [ ] Updated `CHANGELOG.md` under `## [Unreleased]` for any user-facing behavior change.",
                     "- [ ] Ran `python tools/validate_contracts.py` and the needed tests or checks.",
                     "- [ ] Listed exact blockers or skips when validation did not run in the correct environment.",
+                    "- [ ] Replaced, updated, or explicitly explained any anti-dark-code comment removed by this PR.",
                     "",
                 ]
             ),
@@ -90,6 +92,8 @@ class TestValidateMaintenanceHarness(unittest.TestCase):
                     "",
                     "Update stale comments in the same change.",
                     "",
+                    "If a change removes or rewrites an anti-dark-code comment, replace it in the same change or state in the PR record why the old comment no longer applies.",
+                    "",
                 ]
             ),
         )
@@ -111,6 +115,9 @@ class TestValidateMaintenanceHarness(unittest.TestCase):
                     "## Logging And Telemetry Checks",
                     "",
                     "## Remaining Human-Review Limits",
+                    "",
+                    "The PR template keeps a comment-drift reminder.",
+                    "The harness cannot prove a removed explanatory comment was the right comment to remove.",
                     "",
                 ]
             ),

@@ -29,6 +29,7 @@ import jsonschema
 from mmo.cli import main
 from mmo.cli_commands._renderers import _prepare_safe_render_scene_inputs
 from mmo.dsp.meters import iter_wav_float64_samples
+from mmo.core.portable_refs import is_absolute_posix_path
 
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 _SCHEMAS_DIR = _REPO_ROOT / "schemas"
@@ -51,6 +52,17 @@ def _run_main(args: list[str]) -> tuple[int, str, str]:
     with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
         exit_code = main(args)
     return exit_code, stdout.getvalue(), stderr.getvalue()
+
+
+def _live_progress_payloads(stderr: str) -> list[dict[str, object]]:
+    payloads: list[dict[str, object]] = []
+    for line in stderr.splitlines():
+        if not line.startswith("[MMO-LIVE] "):
+            continue
+        payload = json.loads(line[len("[MMO-LIVE] "):])
+        if isinstance(payload, dict):
+            payloads.append(payload)
+    return payloads
 
 
 def _write_16bit_wav(
@@ -2677,19 +2689,25 @@ class TestSafeRenderLiveProgressAndCancel(unittest.TestCase):
                 ]
             )
             self.assertEqual(exit_code, 0, msg=stderr)
-            live_lines = [
-                line[len("[MMO-LIVE] "):]
-                for line in stderr.splitlines()
-                if line.startswith("[MMO-LIVE] ")
-            ]
-            self.assertGreater(len(live_lines), 0, msg=stderr)
-            for raw in live_lines:
-                payload = json.loads(raw)
+            live_payloads = _live_progress_payloads(stderr)
+            self.assertGreater(len(live_payloads), 0, msg=stderr)
+            for payload in live_payloads:
                 self.assertIn("what", payload)
                 self.assertIn("why", payload)
                 self.assertIn("where", payload)
                 self.assertIn("confidence", payload)
                 self.assertIn("progress", payload)
+                where = payload.get("where")
+                self.assertIsInstance(where, list)
+                if not isinstance(where, list):
+                    continue
+                for item in where:
+                    if not isinstance(item, str):
+                        continue
+                    self.assertFalse(
+                        is_absolute_posix_path(item),
+                        msg=f"live progress leaked absolute path in where={where!r}",
+                    )
 
     def test_cancel_file_stops_safe_render_with_exit_130(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

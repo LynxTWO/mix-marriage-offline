@@ -23,12 +23,16 @@ _PROJECT_SESSION_RECEIPT_KEYS = {"path", "payload"}
 
 _PROJECT_SCENE_REL_PATH = Path("drafts/scene.draft.json")
 _PROJECT_HISTORY_REL_PATH = Path("renders/event_log.jsonl")
+# Session export only follows the current scaffold receipt paths. Legacy dotted
+# safe-render receipts are no longer produced by project flows, so keeping them
+# here would silently preserve dead compatibility baggage in future sessions.
 _PROJECT_DEFAULT_RECEIPT_PATHS: tuple[Path, ...] = (
-    Path("safe_render.dry_receipt.json"),
-    Path("safe_render.receipt.json"),
     Path("renders/render_execute.json"),
     Path("renders/render_preflight.json"),
     Path("renders/render_qa.json"),
+)
+_PROJECT_DEFAULT_RECEIPT_PATH_TEXTS = frozenset(
+    path.as_posix() for path in _PROJECT_DEFAULT_RECEIPT_PATHS
 )
 
 _WINDOWS_ABS_PATH_RE = re.compile(r"^[A-Za-z]:/")
@@ -103,6 +107,19 @@ def _validate_relative_posix_path(path_text: Any, *, field_name: str) -> str:
     return "/".join(parts)
 
 
+def _validate_project_session_receipt_path(path_text: Any, *, field_name: str) -> str:
+    normalized = _validate_relative_posix_path(path_text, field_name=field_name)
+    # Session save only exports the current scaffold receipts. Load follows the
+    # same allowlist so a hand-edited session file cannot become a generic
+    # write-any-JSON surface inside the project root.
+    if normalized not in _PROJECT_DEFAULT_RECEIPT_PATH_TEXTS:
+        allowed = ", ".join(sorted(_PROJECT_DEFAULT_RECEIPT_PATH_TEXTS))
+        raise ValueError(
+            f"{field_name} must be one of the allowlisted project receipt paths: {allowed}"
+        )
+    return normalized
+
+
 def _validate_project_session_schema(payload: dict[str, Any]) -> None:
     if jsonschema is None:
         return
@@ -166,7 +183,7 @@ def normalize_project_session(payload: dict[str, Any]) -> dict[str, Any]:
                 f"{', '.join(unknown_receipt_keys)}"
             )
 
-        path_text = _validate_relative_posix_path(
+        path_text = _validate_project_session_receipt_path(
             entry.get("path"),
             field_name=f"receipts[{index}].path",
         )

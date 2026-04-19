@@ -422,11 +422,96 @@ class TestPackagedDesktopSmoke(unittest.TestCase):
                 launch_stderr="stderr line",
             )
 
-            self.assertIn("installer path", receipt)
-            self.assertIn(str(install_log), receipt)
-            self.assertIn("stdout line", receipt)
-            self.assertIn("stderr line", receipt)
-            self.assertIn("MMO Desktop.exe", receipt)
+            self.assertIn("installer label: MMO Desktop-setup.exe", receipt)
+            self.assertIn("install log captured: True", receipt)
+            self.assertIn("install root detected: True", receipt)
+            self.assertIn("launched app stdout lines: 1", receipt)
+            self.assertIn("launched app stderr lines: 1", receipt)
+            self.assertNotIn(str(install_log), receipt)
+            self.assertNotIn("\nstdout line\n", receipt)
+            self.assertNotIn("\nstderr line\n", receipt)
+
+    def test_windows_cleanup_payload_redacts_paths_and_commands(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            uninstall_log = root / "windows-uninstall.log"
+            uninstall_log.write_text("cleanup ok", encoding="utf-8")
+
+            payload = self.module._windows_cleanup_payload(
+                self.module.WindowsCleanupResult(
+                    attempted=True,
+                    ok=True,
+                    strategy="uninstall-exe",
+                    install_root=root / "Programs" / "MMO Desktop",
+                    uninstall_log_path=uninstall_log,
+                    removed_install_root=True,
+                    command=("C:/Users/test/AppData/Local/Programs/MMO Desktop/uninstall.exe", "/S"),
+                    notes=("Uninstall command exited 1.",),
+                )
+            )
+
+            self.assertEqual(
+                payload,
+                {
+                    "attempted": True,
+                    "install_root_detected": True,
+                    "note_count": 1,
+                    "notes_present": True,
+                    "ok": True,
+                    "removed_install_root": True,
+                    "strategy": "uninstall-exe",
+                    "uninstall_log_captured": True,
+                },
+            )
+
+    def test_smoke_result_payload_redacts_paths(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            summary_root = Path(temp_dir) / "summary"
+            summary_root.mkdir()
+            summary = self._valid_summary(summary_root)
+            truth = self.module._validate_summary(
+                summary=summary,
+                repo_root=Path(temp_dir) / "repo",
+                allow_repo_data_root=False,
+            )
+            install_root = Path("C:/Users/test/AppData/Local/Programs/MMO Desktop")
+            install_log_path = Path(temp_dir) / "nsis-install.log"
+            install_log_path.write_text("install ok", encoding="utf-8")
+
+            payload = self.module._smoke_result_payload(
+                artifact_path=Path("C:/Temp/MMO Desktop-setup.exe"),
+                platform_tag="windows",
+                return_code=0,
+                stdout="launch ok\nsecond line\n",
+                stderr="warn line\n",
+                render_truth=truth,
+                windows_install_result=self.module.WindowsInstallResult(
+                    app_executable=install_root / "MMO Desktop.exe",
+                    install_log_path=install_log_path,
+                    install_root=install_root,
+                    installer_kind="nsis",
+                    installer_path=Path("C:/Temp/MMO Desktop-setup.exe"),
+                ),
+                installed_sidecar_paths=[install_root / "mmo.exe"],
+                windows_install_state_path=Path("C:/Temp/mmo-windows-install-state.json"),
+                defer_windows_cleanup=True,
+            )
+
+            self.assertEqual(payload["artifact_label"], "MMO Desktop-setup.exe")
+            self.assertEqual(payload["artifact_kind"], "nsis")
+            self.assertEqual(payload["stdout_line_count"], 2)
+            self.assertEqual(payload["stderr_line_count"], 1)
+            self.assertEqual(payload["installer_label"], "MMO Desktop-setup.exe")
+            self.assertEqual(payload["launched_app_label"], "MMO Desktop.exe")
+            self.assertEqual(payload["installed_sidecar_count"], 1)
+            self.assertTrue(payload["windows_install_state_recorded"])
+            self.assertEqual(payload["windows_install_state_label"], "mmo-windows-install-state.json")
+            serialized = json.dumps(payload, sort_keys=True)
+            self.assertNotIn("resolved_output_path", serialized)
+            self.assertNotIn("C:/Users/test", serialized)
+            self.assertNotIn('"install_root":', serialized)
+            self.assertNotIn("summary_path", serialized)
+            self.assertNotIn("workspace_dir", serialized)
 
     def test_choose_windows_uninstall_command_prefers_uninstall_exe(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

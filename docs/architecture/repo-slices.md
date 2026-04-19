@@ -84,22 +84,56 @@ Order rule:
   rules, and authority boundaries are documented without folklore
 - Next prompt to run: architecture map or ontology-contract audit
 
-## 5. Plugin ecosystem and authoring surfaces
+## 5. Shared plugin contracts and authoring surfaces
 
-- Slice name: `Plugin ecosystem and authoring surfaces`
-- Scope or repo paths: `src/mmo/plugins/`, `plugins/`, `examples/plugin_authoring/`
-- Reason for the slice: plugin interfaces, bundled fallback behavior, and
-  authoring examples can change render and UI behavior
+- Slice name: `Shared plugin contracts and authoring surfaces`
+- Scope or repo paths:
+  `src/mmo/plugins/interfaces.py`,
+  `src/mmo/plugins/runtime_contract.py`,
+  `examples/plugin_authoring/`
+- Reason for the slice: shared plugin interfaces, runtime guardrails, and
+  authoring examples define how plugin code is expected to behave
 - Risk class: high
 - Classification label: `owned-risky`
-- Related runtime units or flows: plugin loading, plugin marketplace install,
-  renderer and resolver plugins, plugin validation, authoring examples
+- Related runtime units or flows: plugin contract ownership, plugin validation,
+  authoring examples, and runtime guardrails for third-party or local plugin
+  code
 - Blockers: none currently recorded
-- Exit criteria for this stage: runtime interfaces, install roots, bundled
-  fallback rules, and authoring examples are explainable without guesswork
-- Next prompt to run: comment critical paths or plugin-contract audit
+- Exit criteria for this stage: shared interfaces, runtime guardrails, and
+  authoring examples are explainable without guesswork
+- Next prompt to run: no immediate action; revisit only if shared contracts or
+  authoring guidance change
 
-## 6. Local dev shell and RPC bridge
+## 6. Bundled plugin implementations and packaged plugin data
+
+- Slice name: `Bundled plugin implementations and packaged plugin data`
+- Scope or repo paths: `plugins/`, `src/mmo/data/plugins/`,
+  `src/mmo/plugins/`, `src/mmo/data/plugin_market/assets/plugins/`,
+  `src/mmo/dsp/plugins/registry.py`, and `src/mmo/plugins/subjective/`
+- Reason for the slice: bundled manifests, packaged fallback manifests,
+  shipped implementation modules, offline market assets, and a subjective-pack
+  bypass still shape render and UI behavior through a second path beyond the
+  shared contracts already reviewed
+- Risk class: high
+- Classification label: `owned-risky`
+- Related runtime units or flows: bundled renderer and resolver behavior,
+  packaged fallback manifests, install-safe bundled fallback, offline market
+  install assets, and subjective plugin behavior that bypasses the main loader
+- Blockers: checkout examples and offline market parity still need clearer
+  evidence if the repo wants stronger bundled-plugin closure than the current
+  comment coverage
+- Current progress note: loader and market authority notes, the first
+  shipped-renderer invariant comments, the corrective approval notes, and the
+  subjective-bypass notes are now in place
+- Exit criteria for this stage: bundled manifests, packaged fallback manifests,
+  shipped plugin implementation behavior, market-install asset boundaries, and
+  the subjective-pack exception are explainable without guesswork
+- Next prompt to run: no immediate protected comment batch remains. If more
+  bundled-plugin certainty is needed, run a bounded evidence pass on checkout
+  examples or offline market parity. Otherwise move to the next risk-ranked
+  slice.
+
+## 7. Local dev shell and RPC bridge
 
 - Slice name: `Local dev shell and RPC bridge`
 - Scope or repo paths: `gui/server.mjs`, `gui/lib/`, `gui/web/`, `gui/tests/`
@@ -116,7 +150,7 @@ Order rule:
   to support later comment or audit work
 - Next prompt to run: frontend or bridge architecture map
 
-## 7. Packaged desktop frontend
+## 8. Packaged desktop frontend
 
 - Slice name: `Packaged desktop frontend`
 - Scope or repo paths: `gui/desktop-tauri/src/`,
@@ -133,7 +167,7 @@ Order rule:
   asset role, and frontend assumptions about backend artifacts are documented
 - Next prompt to run: architecture map
 
-## 8. Desktop native shell and sidecar packaging
+## 9. Desktop native shell and sidecar packaging
 
 - Slice name: `Desktop native shell and sidecar packaging`
 - Scope or repo paths: `gui/desktop-tauri/src-tauri/src/`, `Cargo.toml`,
@@ -150,7 +184,7 @@ Order rule:
   discovery, smoke hooks, and release packaging assumptions are documented
 - Next prompt to run: architecture map or trust-boundary audit
 
-## 9. Validation, smoke, and release tooling
+## 10. Validation, smoke, and release tooling
 
 - Slice name: `Validation, smoke, and release tooling`
 - Scope or repo paths: `tools/`, `Makefile`, `.github/workflows/`
@@ -165,7 +199,7 @@ Order rule:
   steps, and signing surfaces are mapped with no hidden operator assumptions
 - Next prompt to run: ops or release audit
 
-## 10. Evidence, fixtures, examples, and published outputs
+## 11. Evidence, fixtures, examples, and published outputs
 
 - Slice name: `Evidence, fixtures, examples, and published outputs`
 - Scope or repo paths: `tests/`, `fixtures/`, `examples/`, `benchmarks/`,

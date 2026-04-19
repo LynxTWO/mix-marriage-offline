@@ -10,6 +10,8 @@ and tied to repo evidence.
 Review the current repo truth before a non-trivial change.
 
 - Read `AGENTS.md` first. `CLAUDE.md` and `GEMINI.md` defer to it.
+- Treat mirrored workspace copies such as `.claude/agents/` as convenience
+  copies, not authoritative review surfaces.
 - Read `docs/architecture/system-map.md` when the change touches runtime shape,
   trust boundaries, packaged data, support tools, release paths, or hidden
   entrypoints.
@@ -93,6 +95,8 @@ Do not let one clean path stand in for a whole slice.
   claiming the slice is closed.
 - Keep support tooling, release control planes, Pages deploy, and machine-readable
   outputs separate from the main runtime story when they change.
+- Keep mirrored workspace copies separate from canonical steering docs when a
+  summary, review, or comment pass names authoritative sources.
 
 ## Re-check Anti-Dark-Code Comments
 
@@ -100,6 +104,7 @@ If you edit a path that already has anti-dark-code comments, check that the
 comments still match the code.
 
 - Update stale comments in the same change.
+- If a change removes or rewrites an anti-dark-code comment, replace it in the same change or state in the PR record why the old comment no longer applies.
 - Do not leave an old safety note behind after the code moved.
 
 ## Logging And Telemetry Drift

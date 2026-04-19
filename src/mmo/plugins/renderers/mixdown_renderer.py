@@ -636,6 +636,10 @@ class MixdownRenderer(RendererPlugin):
             "renderer_id": self.plugin_id,
             "outputs": [],
             "skipped": [],
+            # Baseline mixdown records which recommendation set was present, but
+            # it does not consume recommendation payloads to change DSP output.
+            # That keeps this renderer a stable reference for later compare and
+            # approval flows.
             "received_recommendation_ids": _received_recommendation_ids(recommendations),
             "stem_resolution": stem_resolution_entries(
                 resolve_session_stems(session),
@@ -682,6 +686,9 @@ class MixdownRenderer(RendererPlugin):
             )
             rel_path = _output_relative_path(output_dir=out_dir, layout_id=layout_id)
             abs_path = out_dir / rel_path
+            # Trace metadata has to describe the same file and seed inputs that
+            # later receipts hash. Recomputing this from a different source
+            # would break determinism checks without changing audio samples.
             trace_metadata = build_trace_metadata(
                 {
                     "session": session,

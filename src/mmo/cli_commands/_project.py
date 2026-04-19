@@ -303,6 +303,97 @@ def _build_project_show_payload(*, project_dir: Path) -> dict[str, Any]:
     }
 
 
+def _build_project_show_shared_payload(payload: dict[str, Any]) -> dict[str, Any]:
+    artifacts: list[dict[str, Any]] = []
+    raw_artifacts = payload.get("artifacts")
+    if isinstance(raw_artifacts, list):
+        for artifact in raw_artifacts:
+            if not isinstance(artifact, dict):
+                continue
+            artifacts.append(
+                {
+                    "path": artifact.get("path"),
+                    "required": artifact.get("required"),
+                    "schema": artifact.get("schema"),
+                    "exists": artifact.get("exists"),
+                    "sha256": artifact.get("sha256"),
+                    "last_built_marker": artifact.get("last_built_marker"),
+                }
+            )
+
+    # This profile is for issue threads, shell captures, and shared logs. It
+    # keeps the allowlisted artifact summary but drops machine-local paths.
+    return {
+        "artifacts": artifacts,
+        "last_built_markers": payload.get("last_built_markers"),
+        "paths_redacted": True,
+        "schema_versions": payload.get("schema_versions"),
+    }
+
+
+def _path_text_is_absolute(path_text: str) -> bool:
+    return path_text.startswith("/") or (
+        len(path_text) >= 3
+        and path_text[0].isalpha()
+        and path_text[1] == ":"
+        and path_text[2] == "/"
+    )
+
+
+def _shared_project_path_ref(path_value: Any, *, project_dir: Any) -> str | None:
+    if not isinstance(path_value, str):
+        return None
+    normalized_path = path_value.replace("\\", "/").strip()
+    if not normalized_path:
+        return None
+    if not _path_text_is_absolute(normalized_path):
+        return normalized_path
+
+    normalized_project_dir = ""
+    if isinstance(project_dir, str):
+        normalized_project_dir = project_dir.replace("\\", "/").strip()
+
+    if normalized_project_dir and _path_text_is_absolute(normalized_project_dir):
+        if normalized_path == normalized_project_dir:
+            return "."
+        prefix = normalized_project_dir.rstrip("/") + "/"
+        if normalized_path.startswith(prefix):
+            return normalized_path[len(prefix):]
+
+    return Path(normalized_path).name
+
+
+def _build_project_session_shared_payload(payload: dict[str, Any]) -> dict[str, Any]:
+    result = {
+        key: value
+        for key, value in payload.items()
+        if key not in {"project_dir", "scene_path", "session_path", "written"}
+    }
+    project_dir = payload.get("project_dir")
+
+    session_path = _shared_project_path_ref(payload.get("session_path"), project_dir=project_dir)
+    if isinstance(session_path, str):
+        result["session_path"] = session_path
+
+    scene_path = _shared_project_path_ref(payload.get("scene_path"), project_dir=project_dir)
+    if isinstance(scene_path, str):
+        result["scene_path"] = scene_path
+
+    raw_written = payload.get("written")
+    if isinstance(raw_written, list):
+        written: list[str] = []
+        for item in raw_written:
+            shared_ref = _shared_project_path_ref(item, project_dir=project_dir)
+            if isinstance(shared_ref, str):
+                written.append(shared_ref)
+        result["written"] = written
+
+    # This profile keeps the machine-readable save/load summary but narrows
+    # machine-local path fields before shell captures or issue threads share it.
+    result["paths_redacted"] = True
+    return result
+
+
 def _render_project_show_text(payload: dict[str, Any]) -> str:
     lines: list[str] = []
     project_dir = payload.get("project_dir", "")
@@ -597,8 +688,12 @@ def _run_project_show(
         print(str(exc), file=sys.stderr)
         return 1
 
-    if output_format == "json":
+    if output_format in {"json", "json-local"}:
         print(json.dumps(payload, indent=2, sort_keys=True))
+        return 0
+
+    if output_format == "json-shared":
+        print(json.dumps(_build_project_show_shared_payload(payload), indent=2, sort_keys=True))
         return 0
 
     if output_format == "text":
@@ -614,6 +709,7 @@ def _run_project_save(
     project_dir: Path,
     session_path: Path | None,
     force: bool,
+    output_format: str,
 ) -> int:
     try:
         payload = save_project_session(
@@ -625,8 +721,16 @@ def _run_project_save(
         print(str(exc), file=sys.stderr)
         return 1
 
-    print(json.dumps(payload, indent=2, sort_keys=True))
-    return 0
+    if output_format in {"json", "json-local"}:
+        print(json.dumps(payload, indent=2, sort_keys=True))
+        return 0
+
+    if output_format == "json-shared":
+        print(json.dumps(_build_project_session_shared_payload(payload), indent=2, sort_keys=True))
+        return 0
+
+    print(f"Unsupported format: {output_format}", file=sys.stderr)
+    return 2
 
 
 def _run_project_load(
@@ -634,6 +738,7 @@ def _run_project_load(
     project_dir: Path,
     session_path: Path | None,
     force: bool,
+    output_format: str,
 ) -> int:
     resolved_session_path = (
         session_path.resolve()
@@ -657,8 +762,16 @@ def _run_project_load(
         print(str(exc), file=sys.stderr)
         return 1
 
-    print(json.dumps(payload, indent=2, sort_keys=True))
-    return 0
+    if output_format in {"json", "json-local"}:
+        print(json.dumps(payload, indent=2, sort_keys=True))
+        return 0
+
+    if output_format == "json-shared":
+        print(json.dumps(_build_project_session_shared_payload(payload), indent=2, sort_keys=True))
+        return 0
+
+    print(f"Unsupported format: {output_format}", file=sys.stderr)
+    return 2
 
 
 def _run_project_build_gui(
@@ -768,6 +881,7 @@ def _run_project_build_gui(
             out_path=normalized_scan_out,
             meters=None,
             include_peak=False,
+            output_format="json-shared",
         )
         if scan_exit != 0:
             return scan_exit

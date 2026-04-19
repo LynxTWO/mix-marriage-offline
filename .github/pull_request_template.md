@@ -8,6 +8,7 @@
 - Risk changed:
 - Approval needed:
 - Docs updated:
+- Anti-dark-code comments checked:
 - Tests or checks run:
 - Repo evidence reviewed:
 
@@ -22,3 +23,5 @@
 - [ ] Ran `python tools/validate_contracts.py` and the needed tests or checks.
 - [ ] Listed exact blockers or skips when validation did not run in the correct
       environment.
+- [ ] Replaced, updated, or explicitly explained any anti-dark-code comment
+      removed by this PR.

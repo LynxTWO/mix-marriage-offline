@@ -39,6 +39,10 @@ Given a folder of aligned stems:
 python -m mmo scan ./stems --out out/report.json
 ```
 
+Bare `mmo scan` stdout now defaults to the shared-safe JSON profile. Use
+`--out` when local tooling needs the full local report. Shared-safe stdout is
+the only shell JSON profile.
+
 Export a recall CSV:
 
 ```bash
@@ -114,12 +118,20 @@ python -m mmo plugin update
 
 ## 8. Project sessions
 
-Save and restore a project session (scene + history + receipts):
+Save and restore a project session (scene + history + allowlisted receipt
+snapshots):
 
 ```bash
 python -m mmo project save ./project --session out/session.json
 python -m mmo project load ./project --session out/session.json
 ```
+
+The CLI now defaults those commands to the shared-safe summary profile. Use
+`--format json-local` only when local tooling needs the full machine-local
+path contract.
+
+The current session receipt scaffold is `renders/render_execute.json`,
+`renders/render_preflight.json`, and `renders/render_qa.json`.
 
 ## 9. Troubleshooting
 

@@ -161,8 +161,17 @@ class TestValidationWavCodec(unittest.TestCase):
                 return
 
             evidence_ids = self._evidence_ids(unsupported)
+            self.assertNotIn("EVID.FILE.HASH.SHA256", evidence_ids)
             self.assertIn("EVID.VALIDATION.WAV_AUDIO_FORMAT", evidence_ids)
             self.assertIn("EVID.VALIDATION.WAV_AUDIO_FORMAT_RESOLVED", evidence_ids)
+            evidence_rows = unsupported.get("evidence", [])
+            file_paths = [
+                item.get("value")
+                for item in evidence_rows
+                if isinstance(item, dict)
+                and item.get("evidence_id") == "EVID.FILE.PATH"
+            ]
+            self.assertEqual(file_paths, ["out_adpcm.wav"])
 
 
 if __name__ == "__main__":

@@ -234,6 +234,17 @@ def main(argv: list[str] | None = None) -> int:
         help="Print a human-readable summary of the scan to stdout.",
     )
     scan_parser.add_argument(
+        "--format",
+        choices=["json-shared"],
+        default="json-shared",
+        help=(
+            "Output format for stdout JSON. "
+            "'json-shared' drops machine-local path anchors, hashes, and "
+            "source tags for shell use. "
+            "Use --out when local tooling needs the full path-bearing report."
+        ),
+    )
+    scan_parser.add_argument(
         "--meters",
         choices=["basic", "truth"],
         default=None,
@@ -2706,9 +2717,14 @@ def main(argv: list[str] | None = None) -> int:
     )
     project_show_parser.add_argument(
         "--format",
-        choices=["json", "text"],
-        default="json",
-        help="Output format for project show output.",
+        choices=["json-local", "json-shared", "text"],
+        default="json-shared",
+        help=(
+            "Output format for project show output. "
+            "'json-shared' drops machine-local path fields for shell use. "
+            "Use 'json-local' when local tooling needs the full path-bearing "
+            "shell contract."
+        ),
     )
 
     project_run_parser = project_subparsers.add_parser(
@@ -2981,6 +2997,17 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="Overwrite existing session JSON.",
     )
+    project_save_parser.add_argument(
+        "--format",
+        choices=["json-local", "json-shared"],
+        default="json-shared",
+        help=(
+            "Output format for project save output. "
+            "'json-shared' narrows path fields for shared logs. "
+            "Use 'json-local' when local tooling needs full machine-local "
+            "paths."
+        ),
+    )
 
     project_load_parser = project_subparsers.add_parser(
         "load",
@@ -2999,6 +3026,17 @@ def main(argv: list[str] | None = None) -> int:
         "--force",
         action="store_true",
         help="Overwrite existing scene/history/receipt files.",
+    )
+    project_load_parser.add_argument(
+        "--format",
+        choices=["json-local", "json-shared"],
+        default="json-shared",
+        help=(
+            "Output format for project load output. "
+            "'json-shared' narrows path fields for shared logs. "
+            "Use 'json-local' when local tooling needs full machine-local "
+            "paths."
+        ),
     )
 
     project_validate_parser = project_subparsers.add_parser(
@@ -4519,6 +4557,7 @@ def main(argv: list[str] | None = None) -> int:
             out_path,
             args.meters,
             args.peak,
+            args.format,
             strict=args.strict,
             dry_run=args.dry_run,
             summary=args.summary,
@@ -5150,7 +5189,8 @@ def main(argv: list[str] | None = None) -> int:
                 print(
                     (
                         "Missing project directory. Usage: "
-                        "mmo project show <project_dir> [--format json|text]."
+                        "mmo project show <project_dir> "
+                        "[--format json-local|json-shared|text]."
                     ),
                     file=sys.stderr,
                 )
@@ -5634,6 +5674,7 @@ def main(argv: list[str] | None = None) -> int:
                     else None
                 ),
                 force=bool(getattr(args, "force", False)),
+                output_format=str(getattr(args, "format", "json")),
             )
 
         if args.project_command == "load":
@@ -5646,6 +5687,7 @@ def main(argv: list[str] | None = None) -> int:
                     else None
                 ),
                 force=bool(getattr(args, "force", False)),
+                output_format=str(getattr(args, "format", "json")),
             )
 
         if args.project_command == "validate":
