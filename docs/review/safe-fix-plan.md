@@ -10,6 +10,69 @@ small enough to review as docs-only work.
 
 ## Current protected-area batch
 
+## 19. Keep project local payloads, retire full-local scan stdout
+
+- Exact files to change:
+  `src/mmo/cli.py`,
+  `src/mmo/tools/scan_session.py`,
+  `src/mmo/cli_commands/_project.py`,
+  `tests/test_scan_smoke.py`,
+  `docs/review/safe-fix-plan.md`,
+  `docs/review/approval-packets.md`,
+  `docs/architecture/coverage-ledger.md`,
+  `docs/security/logging-audit.md`,
+  `docs/review/remediation-backlog.md`,
+  `docs/unknowns/remediation-pass.md`,
+  `docs/unknowns/evidence-gap-pass.md`,
+  `docs/review/evidence-gap-check.md`,
+  `docs/manual/04-the-main-workflows.md`,
+  `docs/user_guide.md`
+- Why this change is safe now:
+  the repo now proves the project local payload still has a real GUI or RPC
+  consumer that depends on path-bearing fields such as `project_dir` and
+  allowlisted artifact `absolute_path`. The scan side is different. Repo-owned
+  scan consumers already use `--out`, direct module calls, or in-memory
+  parsing, and the one runtime caller in `project.build_gui` already reads the
+  file-backed `scan_out` report instead of scan stdout.
+- What behavior must remain unchanged:
+  GUI or RPC `project.show`, `project.save`, and `project.load` local payloads;
+  shell-facing project `json-local` payloads; shared-safe stdout for `mmo scan`
+  and `scan_session`; full local scan report content written under `--out`;
+  `build_report()` payload shape for in-memory callers; `--dry-run` and
+  `--summary` behavior; and project-build GUI scan handoff through `scan_out`
+- Tests or checks to run:
+  `tools/run_pytest.sh -q tests/test_scan_smoke.py tests/test_validation_wav_codec.py tests/test_scan_ffmpeg_basic.py tests/test_scan_ffprobe_layout.py tests/test_scan_truth_weighting_multiformat.py tests/test_truth_meters_optional_deps.py tests/test_cli_scan_lfe_audit.py tests/test_cli_project_build_gui.py`,
+  `python3 tools/validate_contracts.py`,
+  one local shell `mmo scan` default-output sample,
+  one local shell `mmo scan --out out/report.json` sample,
+  `npx --yes markdownlint-cli docs/review/safe-fix-plan.md docs/review/approval-packets.md docs/architecture/coverage-ledger.md docs/security/logging-audit.md docs/review/remediation-backlog.md docs/unknowns/remediation-pass.md docs/unknowns/evidence-gap-pass.md docs/review/evidence-gap-check.md docs/manual/04-the-main-workflows.md docs/user_guide.md`,
+  and `git diff --check -- src/mmo/cli.py src/mmo/tools/scan_session.py src/mmo/cli_commands/_project.py tests/test_scan_smoke.py docs/review/safe-fix-plan.md docs/review/approval-packets.md docs/architecture/coverage-ledger.md docs/security/logging-audit.md docs/review/remediation-backlog.md docs/unknowns/remediation-pass.md docs/unknowns/evidence-gap-pass.md docs/review/evidence-gap-check.md docs/manual/04-the-main-workflows.md docs/user_guide.md`
+- Docs to update:
+  `docs/review/safe-fix-plan.md`,
+  `docs/review/approval-packets.md`,
+  `docs/architecture/coverage-ledger.md`,
+  `docs/security/logging-audit.md`,
+  `docs/review/remediation-backlog.md`,
+  `docs/unknowns/remediation-pass.md`,
+  `docs/unknowns/evidence-gap-pass.md`,
+  `docs/review/evidence-gap-check.md`,
+  `docs/manual/04-the-main-workflows.md`,
+  `docs/user_guide.md`
+- Rollback note:
+  restore the explicit full-local scan stdout mode only if a real shell caller
+  proves it needs raw scan JSON on stdout instead of the file-backed `--out`
+  artifact
+- Observability note:
+  keep the full scan report content intact on disk under `--out`. This batch
+  narrows shell stdout only. It does not change project local payloads or the
+  file-backed scan artifact shape.
+- Change type:
+  behavior-preserving code cleanup
+- Compatibility trim note:
+  this batch retires the last full-local scan stdout contract now that the repo
+  already defaults stdout to the shared-safe profile and uses `--out` for the
+  trusted full report path
+
 ## 18. Scan CLI explicit-local format rename
 
 - Exact files to change:

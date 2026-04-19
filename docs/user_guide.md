@@ -40,9 +40,8 @@ python -m mmo scan ./stems --out out/report.json
 ```
 
 Bare `mmo scan` stdout now defaults to the shared-safe JSON profile. Use
-`--format json-local` only when local tooling needs the full local report
-contract.
-`--out` still writes the full file-backed report.
+`--out` when local tooling needs the full local report. Shared-safe stdout is
+the only shell JSON profile.
 
 Export a recall CSV:
 

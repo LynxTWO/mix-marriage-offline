@@ -881,7 +881,7 @@ def _run_project_build_gui(
             out_path=normalized_scan_out,
             meters=None,
             include_peak=False,
-            output_format="json-local",
+            output_format="json-shared",
         )
         if scan_exit != 0:
             return scan_exit

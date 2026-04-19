@@ -1725,15 +1725,14 @@ def main() -> int:
         parser.add_argument("--out", dest="out", default=None, help="Optional output JSON path.")
         parser.add_argument(
             "--format",
-            choices=["json-local", "json-shared"],
+            choices=["json-shared"],
             default="json-shared",
             help=(
                 "Output format for stdout JSON. "
                 "'json-shared' drops machine-local path anchors, hashes, and "
                 "source tags for shell use. "
-                "Use 'json-local' when local tooling needs the full path-bearing "
-                "shell contract. "
-                "File output under --out stays on the full local report contract."
+                "Use --out when local tooling needs the full path-bearing "
+                "report."
             ),
         )
         parser.add_argument(
