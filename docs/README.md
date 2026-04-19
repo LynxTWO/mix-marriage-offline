@@ -78,6 +78,8 @@ Non-numbered one-offs are kept only as supporting reference when still useful.
 
 ## Contribution Workflow
 
+- [Contributor AI workflow](contributing/ai-workflow.md) Repo-fit workflow for
+  evidence review, doc triggers, unknowns, approval gates, and comment drift.
 - [Status system (`STATUS.md` + `milestones.yaml`)](STATUS.md) Keep milestone
   checklist state and machine-readable milestone state aligned.
 - [architecture/system-map.md](architecture/system-map.md) Inventory of runtime

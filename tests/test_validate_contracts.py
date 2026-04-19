@@ -19,6 +19,7 @@ REQUIRED_CHECK_IDS = [
     "PLUGINS.UI",
     "PKG.MIRROR",
     "DOCS.MILESTONES",
+    "DOCS.MAINTENANCE",
     "DOCS.GUI_PARITY",
     "GUI.TAURI_DESIGN",
     "DOCS.USER_MANUAL",
@@ -41,6 +42,7 @@ REQUIRED_TOOL_SCRIPTS = [
     "validate_plugins_ui.py",
     "validate_packaged_data_mirror.py",
     "validate_milestones.py",
+    "validate_maintenance_harness.py",
     "validate_gui_parity.py",
     "validate_tauri_design_system.py",
     "validate_user_manual.py",
@@ -55,6 +57,10 @@ REQUIRED_REPO_DIRS = [
     "plugins",
     "schemas",
     "src",
+]
+
+REQUIRED_REPO_FILES = [
+    ".github/pull_request_template.md",
 ]
 
 COPYTREE_IGNORE = shutil.ignore_patterns(
@@ -89,6 +95,12 @@ class TestValidateContracts(unittest.TestCase):
         tools_dir.mkdir(parents=True, exist_ok=True)
         for script_name in REQUIRED_TOOL_SCRIPTS:
             shutil.copy2(repo_root / "tools" / script_name, tools_dir / script_name)
+
+        for relative_path in REQUIRED_REPO_FILES:
+            source_path = repo_root / relative_path
+            destination_path = destination / relative_path
+            destination_path.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(source_path, destination_path)
 
     def test_copy_repo_subset_preserves_canonical_preset_source(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
