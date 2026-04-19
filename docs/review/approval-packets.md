@@ -46,36 +46,41 @@ review. This pass does not edit application code.
   scan JSON, or agent trace artifacts. Phase 1 is now implemented on this
   branch: `project show --format json-shared` drops `project_dir` and
   per-artifact `absolute_path`, while the GUI and RPC path stays on the local
-  `json` contract. A local shell and RPC spot-check confirmed that split
-  against the same temporary project.
+  `json` contract. Phase 2 is now implemented on this branch too:
+  `project save --format json-shared` and `project load --format json-shared`
+  keep the current local `json` contract, drop `project_dir`, and replace
+  path fields with project-relative or basename-only refs in the shared
+  profile. Focused CLI and RPC tests now cover both profiles.
 - Smallest safe edit after approval:
   completed phase 1 on this branch by adding `project show --format
-  json-shared`. The next safe edit is still separate from scan: decide whether
-  shell-facing default `json`, `project save`, or `project load` should gain a
-  similar boundary change without breaking GUI and RPC hydration.
+  json-shared`, and completed phase 2 by adding shared-log-safe save and load
+  profiles without changing the default local contract. The next safe edit is
+  still separate from scan: decide whether shell-facing default `json` should
+  narrow next or whether scan output should get its own boundary change.
 - What could break:
   the GUI RPC hydration path, browser shell state, CLI callers, shell scripts,
   test fixtures, or support flows that assume the current project JSON shape.
-  The implemented phase-1 profile is additive, so the remaining break risk
-  sits in any future change to default `json`, `project save`, `project load`,
-  or scan output.
+  The implemented phase-1 and phase-2 profiles are additive, so the remaining
+  break risk sits in any future change to default `json` or scan output.
 - Verification plan:
   phase 1 ran `tools/run_pytest.sh -q tests/test_cli_project_show.py tests/test_cli_gui_rpc.py`
+  and `python3 tools/validate_contracts.py`. Phase 2 ran
+  `tools/run_pytest.sh -q tests/test_cli_project_load_save.py tests/test_cli_gui_rpc.py -k "project_save_and_load or project_save_writes_session_payload or project_load_restores_artifacts or rpc_discover"`
   and `python3 tools/validate_contracts.py`. Remaining phases should add
-  `tests/test_cli_project_load_save.py`, `tests/test_scan_smoke.py`, and
-  `tests/test_cli_scan_lfe_audit.py` when they touch those contracts. This
-  phase also has one local shell `project.show --format json-shared` sample
-  and one local `mmo gui rpc` `project.show` sample that confirmed the routes
-  stay distinct at runtime.
+  `tests/test_scan_smoke.py` and `tests/test_cli_scan_lfe_audit.py` when they
+  touch those contracts. The project-output work also has one local shell
+  `project.show --format json-shared` sample, one local `mmo gui rpc`
+  `project.show` sample, one local shell `project save --format json-shared`
+  sample, and one local shell `project load --format json-shared` sample.
 - Rollback plan:
-  phase 1 can revert the new `json-shared` profile without changing the
-  existing GUI or RPC contract. Leave scan untouched unless a later approved
-  packet lands.
+  phases 1 and 2 can revert the new shared-safe profiles without changing the
+  existing default GUI or RPC contract. Leave scan untouched unless a later
+  approved packet lands.
 - What human decision is required:
-  phase 1 is complete. The next approval decision is whether the repo should
-  stop at the additive shared-safe profile for now, or begin phase 2 on
-  default `json`, `project save`, or `project load`. Scan should stay on a
-  later packet until the shared-channel proof is stronger.
+  phases 1 and 2 are complete. The next approval decision is whether the repo
+  should stop at the additive shared-safe profiles for now, or begin phase 3
+  on shell-facing default `json`. Scan should stay on a later packet until the
+  shared-channel proof is stronger.
 - Which unknowns still block the edit, if any:
   `docs/unknowns/remediation-pass.md` and
   `docs/unknowns/evidence-gap-pass.md` still record missing proof about

@@ -11,6 +11,10 @@ save ./project --session out/session.json
 
 Reload it later: mmo project load ./project --session out/session.json
 
+If you need to paste a save or load summary into an issue or shared log, use
+`--format json-shared`. That keeps the machine-readable counts and written-file
+summary while narrowing machine-local path roots.
+
 Project metadata. Use mmo project show ./project --format json for local
 tooling that needs the full allowlisted path receipts. If you need to paste
 project state into an issue or shared log, use mmo project show ./project

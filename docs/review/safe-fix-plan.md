@@ -10,6 +10,53 @@ small enough to review as docs-only work.
 
 ## Current protected-area batch
 
+## 11. `project.save` and `project.load` shared-log-safe JSON profile
+
+- Exact files to change:
+  `src/mmo/cli.py`,
+  `src/mmo/cli_commands/_project.py`,
+  `src/mmo/cli_commands/_gui_rpc.py`,
+  `tests/test_cli_project_load_save.py`,
+  `tests/test_cli_gui_rpc.py`,
+  `docs/review/safe-fix-plan.md`,
+  `docs/review/approval-packets.md`,
+  `docs/architecture/coverage-ledger.md`,
+  `docs/security/logging-audit.md`,
+  `docs/review/remediation-backlog.md`,
+  `docs/manual/12-projects-sessions-and-artifacts.md`
+- Why this change is safe now:
+  the focused consumer review found no browser or desktop caller for
+  `project.save` or `project.load`, only CLI and RPC contract tests, and an
+  additive shared-log-safe format can narrow shell-facing path fields without
+  changing the existing local `json` contract
+- What behavior must remain unchanged:
+  default `project save` and `project load` JSON shape, GUI RPC default result
+  shape, session write and restore behavior, `project_session.json` defaults,
+  receipt counts, and the relative `written` paths that load already reports
+- Tests or checks to run:
+  `tools/run_pytest.sh -q tests/test_cli_project_load_save.py tests/test_cli_gui_rpc.py -k "project_save_and_load or project_save_writes_session_payload or project_load_restores_artifacts or rpc_discover"`,
+  `python3 tools/validate_contracts.py`,
+  one local shell `project save --format json-shared` sample,
+  one local shell `project load --format json-shared` sample,
+  `npx --yes markdownlint-cli docs/review/safe-fix-plan.md docs/review/approval-packets.md docs/architecture/coverage-ledger.md docs/security/logging-audit.md docs/review/remediation-backlog.md docs/manual/12-projects-sessions-and-artifacts.md`,
+  and `git diff --check -- src/mmo/cli.py src/mmo/cli_commands/_project.py src/mmo/cli_commands/_gui_rpc.py tests/test_cli_project_load_save.py tests/test_cli_gui_rpc.py docs/review/safe-fix-plan.md docs/review/approval-packets.md docs/architecture/coverage-ledger.md docs/security/logging-audit.md docs/review/remediation-backlog.md docs/manual/12-projects-sessions-and-artifacts.md`
+- Docs to update:
+  `docs/review/safe-fix-plan.md`,
+  `docs/review/approval-packets.md`,
+  `docs/architecture/coverage-ledger.md`,
+  `docs/security/logging-audit.md`,
+  `docs/review/remediation-backlog.md`,
+  `docs/manual/12-projects-sessions-and-artifacts.md`
+- Rollback note:
+  revert the new `json-shared` format plumbing for save and load if a caller
+  proves it needs one format only or the new shared-safe profile causes
+  confusion in local tooling
+- Observability note:
+  keep the new profile additive. Do not widen this batch into default `json`
+  changes or scan-output redaction.
+- Change type:
+  behavior-preserving code cleanup
+
 ## 10. Project session receipt allowlist trim
 
 - Exact files to change:

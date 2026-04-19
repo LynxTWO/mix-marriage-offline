@@ -558,6 +558,66 @@ class TestGuiRpcProjectSession(unittest.TestCase):
         self.assertEqual(restored_history, original_history)
         self.assertEqual(json.loads(receipt_path.read_text(encoding="utf-8")), original_receipt)
 
+    def test_project_save_and_load_support_shared_format(self) -> None:
+        project_dir, _ = _init_project(_SANDBOX / "project_session_shared")
+
+        history_path = project_dir / "renders" / "event_log.jsonl"
+        history_path.parent.mkdir(parents=True, exist_ok=True)
+        history_path.write_text(
+            json.dumps({"event_id": "EVENT.ORIGINAL", "kind": "info"}, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+        receipt_path = project_dir / "renders" / "render_preflight.json"
+        receipt_path.write_text(
+            json.dumps({"schema_version": "0.1.0", "checks": [], "issues": []}, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+
+        exit_code, responses, _, stderr = _run_rpc(
+            [
+                {
+                    "id": "session-save-shared",
+                    "method": "project.save",
+                    "params": {"project_dir": str(project_dir), "format": "json-shared"},
+                }
+            ]
+        )
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(stderr, "")
+        self.assertEqual(len(responses), 1)
+        self.assertTrue(responses[0]["ok"])
+        save_result = responses[0]["result"]
+        self.assertTrue(save_result["paths_redacted"])
+        self.assertNotIn("project_dir", save_result)
+        self.assertEqual(save_result["scene_path"], "drafts/scene.draft.json")
+        self.assertEqual(save_result["session_path"], "project_session.json")
+        self.assertEqual(save_result["written"], ["project_session.json"])
+
+        exit_code, responses, _, stderr = _run_rpc(
+            [
+                {
+                    "id": "session-load-shared",
+                    "method": "project.load",
+                    "params": {
+                        "project_dir": str(project_dir),
+                        "force": True,
+                        "format": "json-shared",
+                    },
+                }
+            ]
+        )
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(stderr, "")
+        self.assertEqual(len(responses), 1)
+        self.assertTrue(responses[0]["ok"])
+        load_result = responses[0]["result"]
+        self.assertTrue(load_result["paths_redacted"])
+        self.assertNotIn("project_dir", load_result)
+        self.assertEqual(load_result["session_path"], "project_session.json")
+        self.assertIn("drafts/scene.draft.json", load_result["written"])
+        self.assertIn("renders/event_log.jsonl", load_result["written"])
+        self.assertIn("renders/render_preflight.json", load_result["written"])
+
 
 class TestGuiRpcSceneLocks(unittest.TestCase):
     def test_scene_locks_inspect_returns_object_rows_with_confidence(self) -> None:
@@ -801,6 +861,16 @@ class TestGuiRpcDiscover(unittest.TestCase):
         ]
         self.assertIn("include_plugin_ui_hints", project_build_gui_optional)
         self.assertIn("plugins", project_build_gui_optional)
+
+        project_save_optional = method_details["project.save"]["params_schema"]["optional"]
+        self.assertIn("format", project_save_optional)
+        project_save_shape = method_details["project.save"]["result_shape"]
+        self.assertIn("paths_redacted", project_save_shape.get("optional_keys", []))
+
+        project_load_optional = method_details["project.load"]["params_schema"]["optional"]
+        self.assertIn("format", project_load_optional)
+        project_load_shape = method_details["project.load"]["result_shape"]
+        self.assertIn("paths_redacted", project_load_shape.get("optional_keys", []))
 
         project_render_run_optional = method_details["project.render_run"]["params_schema"][
             "optional"

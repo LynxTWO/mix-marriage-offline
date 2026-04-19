@@ -2985,6 +2985,16 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="Overwrite existing session JSON.",
     )
+    project_save_parser.add_argument(
+        "--format",
+        choices=["json", "json-shared"],
+        default="json",
+        help=(
+            "Output format for project save output. "
+            "'json' keeps local machine paths for local tooling. "
+            "'json-shared' narrows path fields for shared logs."
+        ),
+    )
 
     project_load_parser = project_subparsers.add_parser(
         "load",
@@ -3003,6 +3013,16 @@ def main(argv: list[str] | None = None) -> int:
         "--force",
         action="store_true",
         help="Overwrite existing scene/history/receipt files.",
+    )
+    project_load_parser.add_argument(
+        "--format",
+        choices=["json", "json-shared"],
+        default="json",
+        help=(
+            "Output format for project load output. "
+            "'json' keeps local machine paths for local tooling. "
+            "'json-shared' narrows path fields for shared logs."
+        ),
     )
 
     project_validate_parser = project_subparsers.add_parser(
@@ -5639,6 +5659,7 @@ def main(argv: list[str] | None = None) -> int:
                     else None
                 ),
                 force=bool(getattr(args, "force", False)),
+                output_format=str(getattr(args, "format", "json")),
             )
 
         if args.project_command == "load":
@@ -5651,6 +5672,7 @@ def main(argv: list[str] | None = None) -> int:
                     else None
                 ),
                 force=bool(getattr(args, "force", False)),
+                output_format=str(getattr(args, "format", "json")),
             )
 
         if args.project_command == "validate":
