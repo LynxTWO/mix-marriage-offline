@@ -121,6 +121,10 @@ python -m mmo project save ./project --session out/session.json
 python -m mmo project load ./project --session out/session.json
 ```
 
+The CLI now defaults those commands to the shared-safe summary profile. Use
+`--format json` only when local tooling needs the full machine-local path
+contract.
+
 ## 9. Troubleshooting
 
 - If truth metering fails in a source checkout: repair the base install with

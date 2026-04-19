@@ -2988,11 +2988,11 @@ def main(argv: list[str] | None = None) -> int:
     project_save_parser.add_argument(
         "--format",
         choices=["json", "json-shared"],
-        default="json",
+        default="json-shared",
         help=(
             "Output format for project save output. "
-            "'json' keeps local machine paths for local tooling. "
-            "'json-shared' narrows path fields for shared logs."
+            "'json-shared' narrows path fields for shared logs. "
+            "Use 'json' when local tooling needs full machine-local paths."
         ),
     )
 
@@ -3017,11 +3017,11 @@ def main(argv: list[str] | None = None) -> int:
     project_load_parser.add_argument(
         "--format",
         choices=["json", "json-shared"],
-        default="json",
+        default="json-shared",
         help=(
             "Output format for project load output. "
-            "'json' keeps local machine paths for local tooling. "
-            "'json-shared' narrows path fields for shared logs."
+            "'json-shared' narrows path fields for shared logs. "
+            "Use 'json' when local tooling needs full machine-local paths."
         ),
     )
 

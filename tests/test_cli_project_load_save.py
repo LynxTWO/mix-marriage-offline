@@ -84,7 +84,9 @@ class TestCliProjectLoadSave(unittest.TestCase):
             encoding="utf-8",
         )
 
-        exit_code, stdout, stderr = _run_main(["project", "save", str(project_dir)])
+        exit_code, stdout, stderr = _run_main(
+            ["project", "save", str(project_dir), "--format", "json"]
+        )
         self.assertEqual(exit_code, 0, msg=stderr)
         payload = json.loads(stdout)
 
@@ -149,6 +151,20 @@ class TestCliProjectLoadSave(unittest.TestCase):
         self.assertNotIn(project_dir.resolve().as_posix(), stdout)
         self.assertNotIn(session_path.resolve().as_posix(), stdout)
 
+    def test_project_save_defaults_to_shared_json(self) -> None:
+        base = _SANDBOX / "save_default_shared"
+        project_dir = _init_project(base)
+
+        exit_code, stdout, stderr = _run_main(["project", "save", str(project_dir)])
+        self.assertEqual(exit_code, 0, msg=stderr)
+        payload = json.loads(stdout)
+
+        self.assertTrue(payload["paths_redacted"])
+        self.assertNotIn("project_dir", payload)
+        self.assertEqual(payload["scene_path"], "drafts/scene.draft.json")
+        self.assertEqual(payload["session_path"], "project_session.json")
+        self.assertEqual(payload["written"], ["project_session.json"])
+
     def test_project_load_restores_artifacts(self) -> None:
         base = _SANDBOX / "load"
         project_dir = _init_project(base)
@@ -171,7 +187,7 @@ class TestCliProjectLoadSave(unittest.TestCase):
             encoding="utf-8",
         )
 
-        exit_code, _, stderr = _run_main(["project", "save", str(project_dir)])
+        exit_code, _, stderr = _run_main(["project", "save", str(project_dir), "--format", "json"])
         self.assertEqual(exit_code, 0, msg=stderr)
 
         scene_path.write_text(
@@ -193,7 +209,9 @@ class TestCliProjectLoadSave(unittest.TestCase):
         self.assertEqual(exit_code, 1)
         self.assertIn("use --force", stderr)
 
-        exit_code, stdout, stderr = _run_main(["project", "load", str(project_dir), "--force"])
+        exit_code, stdout, stderr = _run_main(
+            ["project", "load", str(project_dir), "--force", "--format", "json"]
+        )
         self.assertEqual(exit_code, 0, msg=stderr)
         payload = json.loads(stdout)
         self.assertTrue(payload["ok"])
@@ -211,6 +229,37 @@ class TestCliProjectLoadSave(unittest.TestCase):
         ]
         self.assertEqual(restored_history_lines, original_history)
         self.assertEqual(json.loads(receipt_path.read_text(encoding="utf-8")), receipt_payload)
+
+    def test_project_load_defaults_to_shared_json(self) -> None:
+        base = _SANDBOX / "load_default_shared"
+        project_dir = _init_project(base)
+
+        history_path = project_dir / "renders" / "event_log.jsonl"
+        history_path.parent.mkdir(parents=True, exist_ok=True)
+        history_path.write_text(
+            json.dumps({"event_id": "EVENT.ORIGINAL", "kind": "info"}, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+        receipt_path = project_dir / "renders" / "render_preflight.json"
+        receipt_payload = {"schema_version": "0.1.0", "checks": [], "issues": []}
+        receipt_path.write_text(
+            json.dumps(receipt_payload, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+
+        exit_code, _, stderr = _run_main(["project", "save", str(project_dir), "--format", "json"])
+        self.assertEqual(exit_code, 0, msg=stderr)
+
+        exit_code, stdout, stderr = _run_main(["project", "load", str(project_dir), "--force"])
+        self.assertEqual(exit_code, 0, msg=stderr)
+        payload = json.loads(stdout)
+
+        self.assertTrue(payload["paths_redacted"])
+        self.assertNotIn("project_dir", payload)
+        self.assertEqual(payload["session_path"], "project_session.json")
+        self.assertIn("drafts/scene.draft.json", payload["written"])
+        self.assertIn("renders/event_log.jsonl", payload["written"])
+        self.assertIn("renders/render_preflight.json", payload["written"])
 
     def test_project_load_shared_json_redacts_machine_local_paths(self) -> None:
         base = _SANDBOX / "load_shared"

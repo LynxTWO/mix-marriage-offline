@@ -10,6 +10,51 @@ small enough to review as docs-only work.
 
 ## Current protected-area batch
 
+## 12. Shell-facing `project.save` and `project.load` defaults
+
+- Exact files to change:
+  `src/mmo/cli.py`,
+  `tests/test_cli_project_load_save.py`,
+  `docs/review/safe-fix-plan.md`,
+  `docs/review/approval-packets.md`,
+  `docs/architecture/coverage-ledger.md`,
+  `docs/security/logging-audit.md`,
+  `docs/review/remediation-backlog.md`,
+  `docs/manual/12-projects-sessions-and-artifacts.md`,
+  `docs/user_guide.md`
+- Why this change is safe now:
+  the focused caller audit found no in-repo app consumer for the CLI defaults,
+  only tests and docs, and the prior batch already added explicit `json` and
+  `json-shared` profiles so the shell-facing default can narrow without
+  removing the full local path contract
+- What behavior must remain unchanged:
+  RPC default `json` payloads, explicit `--format json` behavior for CLI save
+  and load, session write and restore semantics, receipt counts, and the
+  project-relative `written` paths that load reports
+- Tests or checks to run:
+  `tools/run_pytest.sh -q tests/test_cli_project_load_save.py tests/test_cli_gui_rpc.py`,
+  `python3 tools/validate_contracts.py`,
+  one local shell `project save` default-output sample,
+  one local shell `project load` default-output sample,
+  `npx --yes markdownlint-cli docs/review/safe-fix-plan.md docs/review/approval-packets.md docs/architecture/coverage-ledger.md docs/security/logging-audit.md docs/review/remediation-backlog.md docs/manual/12-projects-sessions-and-artifacts.md docs/user_guide.md`,
+  and `git diff --check -- src/mmo/cli.py tests/test_cli_project_load_save.py docs/review/safe-fix-plan.md docs/review/approval-packets.md docs/architecture/coverage-ledger.md docs/security/logging-audit.md docs/review/remediation-backlog.md docs/manual/12-projects-sessions-and-artifacts.md docs/user_guide.md`
+- Docs to update:
+  `docs/review/safe-fix-plan.md`,
+  `docs/review/approval-packets.md`,
+  `docs/architecture/coverage-ledger.md`,
+  `docs/security/logging-audit.md`,
+  `docs/review/remediation-backlog.md`,
+  `docs/manual/12-projects-sessions-and-artifacts.md`,
+  `docs/user_guide.md`
+- Rollback note:
+  restore the CLI default to `json` if a shell-facing caller proves it relied
+  on the old machine-local path contract without passing `--format json`
+- Observability note:
+  keep this boundary limited to CLI defaults. Do not widen it into RPC default
+  changes or scan-output redaction.
+- Change type:
+  behavior-preserving code cleanup
+
 ## 11. `project.save` and `project.load` shared-log-safe JSON profile
 
 - Exact files to change:
